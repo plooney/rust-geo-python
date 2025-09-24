@@ -1,0 +1,17 @@
+[package]
+name = "rust-geo"
+version = "0.1.0"
+authors = ["plooney"]
+edition = "2024"
+
+[lib]
+name = "rust_geo"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.26.0", features = ["extension-module", "abi3-py37"] }
+ndarray = {version="0.16", features = ["rayon"]}
+numpy = "0.26.0"
+geo = { version = "0.31.0" }
+
+[workspace]
