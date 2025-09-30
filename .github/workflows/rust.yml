@@ -11,36 +11,21 @@ env:
   ARTIFACT: artifact.bin
       
 jobs:
-  build:
-    runs-on: ${{ matrix.os }} 
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-         
-    steps:
-      - uses: actions/checkout@v5
+        # macos-13 is an intel runner, macos-14 is apple silicon
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
 
-      - shell: bash
-        run: cargo build --verbose
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
 
       - uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.os }}-${{ github.sha }}
-          path: ${{ env.ARTIFACT }}
-
-  publish:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - shell: bash
-        working-directory: artifacts
-        run: |
-          for i in $( ls ); do
-            cat $i/$ARTIFACT
-          done
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
