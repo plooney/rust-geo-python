@@ -2,7 +2,7 @@ use ndarray::parallel::prelude::ParallelIterator;
 use numpy::ndarray::{Axis, Array1};
 use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, IntoPyArray};
 
-use geo::{Point, Polygon, LineString, Distance, Euclidean};
+use geo::{Point, LineString, Distance, Euclidean};
 use ndarray::{ArrayView1, ArrayView2};
 use ndarray::parallel::prelude::IntoParallelIterator;
 use pyo3::{pymodule, types::{PyModule}, Bound, PyResult, Python};
