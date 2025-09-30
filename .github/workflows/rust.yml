@@ -27,7 +27,7 @@ jobs:
         env:
             CIBW_BEFORE_BUILD_LINUX: curl -sSf https://sh.rustup.rs | sh -s -- -y
             CIBW_ENVIRONMENT_LINUX: "PATH=$HOME/.cargo/bin:$PATH"
-            CIBW_SKIP: "cp36-* cp37-* cp38-* pp* *-win32 *-musllinux* *_i686"
+            CIBW_SKIP: "cp38-* cp39-* cp310-* pp* *-win32 *-musllinux* *_i686"
 
       - uses: actions/upload-artifact@v4
         with:
