@@ -15,9 +15,9 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
         let path = y.axis_iter(Axis(0))
             .map(|x| Point::new(x[0], x[1]))
             .collect::<LineString>();
-        let polygon = Polygon::new(path, vec![]);
+        //let polygon = Polygon::new(path, vec![]);
         let point = Point::new(x[0], x[1]);
-        let distance = Euclidean.distance(&point,&polygon);
+        let distance = Euclidean.distance(&point,&path);
         distance
 
     }
