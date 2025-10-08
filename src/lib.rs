@@ -8,7 +8,7 @@ use ndarray::parallel::prelude::IntoParallelIterator;
 use pyo3::{pymodule, types::{PyModule}, Bound, PyResult, Python};
 
 #[pymodule]
-#[pyo3(name = "rust_geo")]
+#[pyo3(name = "rust_geo_python")]
 fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
 
     fn point_poly_distance(x: ArrayView1<f64>, y: ArrayView2<f64>) -> f64 {

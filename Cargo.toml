@@ -1,11 +1,11 @@
 [package]
-name = "rust-geo"
+name = "rust-geo-python"
 version = "0.1.0"
 authors = ["plooney"]
 edition = "2024"
 
 [lib]
-name = "rust_geo"
+name = "rust_geo_python"
 crate-type = ["cdylib"]
 
 [dependencies]
