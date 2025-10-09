@@ -15,7 +15,6 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
         let path = y.axis_iter(Axis(0))
             .map(|x| Point::new(x[0], x[1]))
             .collect::<LineString>();
-        //let polygon = Polygon::new(path, vec![]);
         let point = Point::new(x[0], x[1]);
         let distance = Euclidean.distance(&point,&path);
         distance
@@ -47,6 +46,25 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
             .map(|p| point_poly_distance(p,y))
             .collect::<Array1<f64>>();
         distances.into_pyarray(py)
+    }
+    #[pyfn(m)]
+    #[pyo3(name = "polygon_polygon_distance")]
+    fn poly_poly_distance_py<'py>(
+        x: PyReadonlyArray2<'py, f64>,
+        y: PyReadonlyArray2<'py, f64>,
+    ) -> f64 {
+        let path_x = x
+            .as_array()
+            .axis_iter(Axis(0))
+            .map(|x| Point::new(x[0], x[1]))
+            .collect::<LineString>();
+        let path_y = y
+            .as_array()
+            .axis_iter(Axis(0))
+            .map(|x| Point::new(x[0], x[1]))
+            .collect::<LineString>();
+        let distance = Euclidean.distance(&path_x,&path_y);
+        distance
     }
 
     #[pyfn(m)]
