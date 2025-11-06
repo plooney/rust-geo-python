@@ -1,18 +1,16 @@
-use ndarray::parallel::prelude::ParallelIterator;
-use numpy::ndarray::{Array1, Array2, Axis, arr2, array};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+#[pyo3::pymodule]
+//#[pymodule(name = "rust_geo_python")]
+mod rust_geo_python {
+    use ndarray::parallel::prelude::ParallelIterator;
+    use numpy::ndarray::{Array1, Array2, Axis};
+    use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 
-use geo::{Area, Distance, Euclidean, LineString, Point, Polygon, unary_union};
-use ndarray::parallel::prelude::IntoParallelIterator;
-use ndarray::{ArrayView1, ArrayView2};
-use pyo3::{
-    Bound, PyResult, Python, pymodule,
-    types::{PyDict, PyList, PyModule},
-};
+    use geo::{Area, Distance, Euclidean, LineString, Point, Polygon, unary_union};
+    use ndarray::parallel::prelude::IntoParallelIterator;
+    use ndarray::{ArrayView1, ArrayView2};
+    use pyo3::prelude::*;
+    use pyo3::{Bound, PyResult, Python, pymodule, types::PyModule};
 
-#[pymodule]
-#[pyo3(name = "rust_geo_python")]
-fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
     fn point_poly_distance(x: ArrayView1<f64>, y: ArrayView2<f64>) -> f64 {
         let path = y
             .axis_iter(Axis(0))
@@ -23,8 +21,7 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
         distance
     }
 
-    #[pyfn(m)]
-    #[pyo3(name = "point_polygon_distance")]
+    #[pyfunction]
     fn point_poly_distance_py<'py>(
         x: PyReadonlyArray1<'py, f64>,
         y: PyReadonlyArray2<'py, f64>,
@@ -35,8 +32,7 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
         Ok(distance)
     }
 
-    #[pyfn(m)]
-    #[pyo3(name = "points_polygon_distance")]
+    #[pyfunction]
     fn points_poly_distance_py<'py>(
         py: Python<'py>,
         x: PyReadonlyArray2<'py, f64>,
@@ -51,8 +47,7 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
         distances.into_pyarray(py)
     }
 
-    #[pyfn(m)]
-    #[pyo3(name = "polygon_polygon_distance")]
+    #[pyfunction]
     fn poly_poly_distance_py<'py>(
         x: PyReadonlyArray2<'py, f64>,
         y: PyReadonlyArray2<'py, f64>,
@@ -71,8 +66,7 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
         distance
     }
 
-    #[pyfn(m)]
-    #[pyo3(name = "points_polygon_dist_mut")]
+    #[pyfunction(name = "points_polygon_dist_mut")]
     fn points_poly_distance_mut_py<'py>(
         py: Python<'py>,
         x: PyReadonlyArray2<'py, f64>,
@@ -144,8 +138,7 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
             .collect::<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>>()
     }
 
-    #[pyfn(m)]
-    #[pyo3(name = "union_set_shapes")]
+    #[pyfunction]
     fn union_set_shapes<'py>(
         py: Python<'py>,
         pyarrays: Vec<(PyReadonlyArray2<'py, f64>, Vec<PyReadonlyArray2<'py, f64>>)>,
@@ -159,6 +152,4 @@ fn polygon<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
         println!("Area {}", area);
         polygons_to_array2(py, union.iter().collect::<Vec<&Polygon>>())
     }
-
-    Ok(())
 }
