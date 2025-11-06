@@ -1,5 +1,4 @@
 #[pyo3::pymodule]
-//#[pymodule(name = "rust_geo_python")]
 mod rust_geo_python {
     use ndarray::parallel::prelude::ParallelIterator;
     use numpy::ndarray::{Array1, Array2, Axis};
@@ -9,7 +8,7 @@ mod rust_geo_python {
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
     use pyo3::prelude::*;
-    use pyo3::{Bound, PyResult, Python, pymodule, types::PyModule};
+    use pyo3::{Bound, PyResult, Python};
 
     fn point_poly_distance(x: ArrayView1<f64>, y: ArrayView2<f64>) -> f64 {
         let path = y
@@ -21,7 +20,7 @@ mod rust_geo_python {
         distance
     }
 
-    #[pyfunction]
+    #[pyfunction(name = "point_poly_distance")]
     fn point_poly_distance_py<'py>(
         x: PyReadonlyArray1<'py, f64>,
         y: PyReadonlyArray2<'py, f64>,
@@ -32,7 +31,7 @@ mod rust_geo_python {
         Ok(distance)
     }
 
-    #[pyfunction]
+    #[pyfunction(name = "points_polygon_distance")]
     fn points_poly_distance_py<'py>(
         py: Python<'py>,
         x: PyReadonlyArray2<'py, f64>,
@@ -47,7 +46,7 @@ mod rust_geo_python {
         distances.into_pyarray(py)
     }
 
-    #[pyfunction]
+    #[pyfunction(name = "polygon_polygon_distance")]
     fn poly_poly_distance_py<'py>(
         x: PyReadonlyArray2<'py, f64>,
         y: PyReadonlyArray2<'py, f64>,
@@ -104,7 +103,6 @@ mod rust_geo_python {
     }
 
     fn linestring_to_array2<'py>(py: Python<'py>, ls: &LineString) -> Bound<'py, PyArray2<f64>> {
-        //let arr = array2!(
         let n_points = ls.points().len();
         let mut arr = Array2::zeros((2, n_points));
         let mut i = 0;
@@ -114,7 +112,6 @@ mod rust_geo_python {
             arr[[1, i]] = y;
             i += 1;
         });
-        //);
         let pyarray = PyArray2::from_owned_array(py, arr);
         pyarray
     }
