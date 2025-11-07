@@ -1,8 +1,8 @@
 [package]
 name = "rust-geo-python"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["plooney"]
-edition = "2024"
+edition = "2025"
 
 [lib]
 name = "rust_geo_python"
