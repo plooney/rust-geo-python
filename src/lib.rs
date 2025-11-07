@@ -4,7 +4,7 @@ mod rust_geo_python {
     use numpy::ndarray::{Array1, Array2, Axis};
     use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 
-    use geo::{Area, Distance, Euclidean, LineString, Point, Polygon, unary_union};
+    use geo::{Area, BooleanOps, Distance, Euclidean, LineString, Point, Polygon, unary_union};
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
     use pyo3::prelude::*;
@@ -146,7 +146,30 @@ mod rust_geo_python {
             .collect::<Vec<Polygon>>();
         let union = unary_union(&polygons);
         let area = union.unsigned_area();
-        println!("Area {}", area);
         polygons_to_array2(py, union.iter().collect::<Vec<&Polygon>>())
+    }
+
+    #[pyfunction]
+    fn intersection_shapes<'py>(
+        py: Python<'py>,
+        pyarray_x: (PyReadonlyArray2<'py, f64>, Vec<PyReadonlyArray2<'py, f64>>),
+        pyarray_y: (PyReadonlyArray2<'py, f64>, Vec<PyReadonlyArray2<'py, f64>>),
+    ) -> Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)> {
+        let polygon_x = array2_to_polygon(&pyarray_x.0, &pyarray_x.1);
+        let polygon_y = array2_to_polygon(&pyarray_y.0, &pyarray_y.1);
+        let intersection = polygon_x.intersection(&polygon_y);
+        polygons_to_array2(py, intersection.iter().collect::<Vec<&Polygon>>())
+    }
+
+    #[pyfunction]
+    fn difference_shapes<'py>(
+        py: Python<'py>,
+        pyarray_x: (PyReadonlyArray2<'py, f64>, Vec<PyReadonlyArray2<'py, f64>>),
+        pyarray_y: (PyReadonlyArray2<'py, f64>, Vec<PyReadonlyArray2<'py, f64>>),
+    ) -> Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)> {
+        let polygon_x = array2_to_polygon(&pyarray_x.0, &pyarray_x.1);
+        let polygon_y = array2_to_polygon(&pyarray_y.0, &pyarray_y.1);
+        let intersection = polygon_x.difference(&polygon_y);
+        polygons_to_array2(py, intersection.iter().collect::<Vec<&Polygon>>())
     }
 }
