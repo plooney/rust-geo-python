@@ -4,7 +4,7 @@ mod rust_geo_python {
     use numpy::ndarray::{Array1, Array2, Axis};
     use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 
-    use geo::{Area, BooleanOps, Distance, Euclidean, LineString, Point, Polygon, unary_union};
+    use geo::{BooleanOps, Distance, Euclidean, LineString, Point, Polygon, unary_union};
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
     use pyo3::prelude::*;
@@ -145,7 +145,6 @@ mod rust_geo_python {
             .map(|(x, ys)| array2_to_polygon(x, ys))
             .collect::<Vec<Polygon>>();
         let union = unary_union(&polygons);
-        let area = union.unsigned_area();
         polygons_to_array2(py, union.iter().collect::<Vec<&Polygon>>())
     }
 
