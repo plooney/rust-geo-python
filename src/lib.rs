@@ -20,7 +20,7 @@ mod rust_geo_python {
         distance
     }
 
-    #[pyfunction(name = "point_poly_distance")]
+    #[pyfunction(name = "point_polygon_distance")]
     fn point_poly_distance_py<'py>(
         x: PyReadonlyArray1<'py, f64>,
         y: PyReadonlyArray2<'py, f64>,
