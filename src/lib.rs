@@ -2,17 +2,21 @@
 mod rust_geo_python {
     use ndarray::parallel::prelude::ParallelIterator;
     use numpy::ndarray::{Array1, Array2, Axis};
-    use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+    use numpy::{
+        IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
+    };
 
     use geo::{
-        BooleanOps, Distance, Euclidean, LineString, MultiLineString, MultiPolygon, Point, Polygon,
-        unary_union,
+        BooleanOps, Contains, Distance, Euclidean, LineString, MultiLineString, MultiPolygon,
+        Point, Polygon, unary_union,
     };
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
     use pyo3::prelude::*;
     use pyo3::{Bound, PyResult, Python};
     use std::sync::Arc;
+    use wkb::writer;
+    use wkt::ToWkt;
 
     fn point_poly_distance(x: ArrayView1<f64>, y: ArrayView2<f64>) -> f64 {
         let path = y
@@ -86,6 +90,7 @@ mod rust_geo_python {
     }
 
     fn array2_to_linestring<'py>(x: &PyReadonlyArray2<'py, f64>) -> LineString {
+        println!("shape x: {}, y: {}", x.shape()[0], x.shape()[1]);
         let path = x
             .as_array()
             .axis_iter(Axis(0))
@@ -178,7 +183,7 @@ mod rust_geo_python {
 
     #[derive(Clone)]
     enum Shapes {
-        Point(Point),
+        Point(Arc<Point>),
         LineString(LineString),
         MultiLineString(MultiLineString),
         Polygon(Arc<Polygon>),
@@ -193,7 +198,9 @@ mod rust_geo_python {
 
     #[pyclass(extends=Shape)]
     #[derive(Clone)]
-    struct RustPoint {}
+    struct RustPoint {
+        point: Arc<Point>,
+    }
     #[pyclass(extends=Shape)]
     struct RustLineString {}
     #[pyclass(extends=Shape)]
@@ -212,6 +219,7 @@ mod rust_geo_python {
         #[new]
         fn new(x: PyReadonlyArray2<f64>) -> (Self, Shape) {
             let ls = array2_to_linestring(&x);
+            assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
             (
                 RustLineString {},
                 Shape {
@@ -225,10 +233,14 @@ mod rust_geo_python {
     impl RustPoint {
         #[new]
         fn new(x: f64, y: f64) -> (Self, Shape) {
+            let point = Point::new(x, y);
+            let point_arc = Arc::new(point);
             (
-                RustPoint {},
+                RustPoint {
+                    point: point_arc.clone(),
+                },
                 Shape {
-                    inner: Shapes::Point(Point::new(x, y)),
+                    inner: Shapes::Point(point_arc.clone()),
                 },
             )
         }
@@ -291,18 +303,20 @@ mod rust_geo_python {
     impl Shape {
         fn distance(&self, rhs: &Shape) -> f64 {
             match (&self.inner, &rhs.inner) {
-                (Shapes::Point(p), Shapes::Point(q)) => Euclidean.distance(p, q),
-                (Shapes::LineString(p), Shapes::Point(q)) => Euclidean.distance(p, q),
-                (Shapes::Point(p), Shapes::LineString(q)) => Euclidean.distance(p, q),
+                (Shapes::Point(p), Shapes::Point(q)) => Euclidean.distance(p.as_ref(), q.as_ref()),
+                (Shapes::LineString(p), Shapes::Point(q)) => Euclidean.distance(p, q.as_ref()),
+                (Shapes::Point(p), Shapes::LineString(q)) => Euclidean.distance(p.as_ref(), q),
                 (Shapes::LineString(p), Shapes::LineString(q)) => Euclidean.distance(p, q),
-                (Shapes::MultiLineString(p), Shapes::Point(q)) => Euclidean.distance(p, q),
+                (Shapes::MultiLineString(p), Shapes::Point(q)) => Euclidean.distance(p, q.as_ref()),
                 (Shapes::MultiLineString(p), Shapes::LineString(q)) => Euclidean.distance(p, q),
                 (Shapes::MultiLineString(p), Shapes::MultiLineString(q)) => {
                     Euclidean.distance(p, q)
                 }
-                (Shapes::Point(p), Shapes::MultiLineString(q)) => Euclidean.distance(p, q),
+                (Shapes::Point(p), Shapes::MultiLineString(q)) => Euclidean.distance(p.as_ref(), q),
                 (Shapes::LineString(p), Shapes::MultiLineString(q)) => Euclidean.distance(p, q),
-                (Shapes::Polygon(p), Shapes::Point(q)) => Euclidean.distance(p.as_ref(), q),
+                (Shapes::Polygon(p), Shapes::Point(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
                 (Shapes::Polygon(p), Shapes::LineString(q)) => Euclidean.distance(p.as_ref(), q),
                 (Shapes::Polygon(p), Shapes::MultiLineString(q)) => {
                     Euclidean.distance(p.as_ref(), q)
@@ -310,25 +324,36 @@ mod rust_geo_python {
                 (Shapes::Polygon(p), Shapes::Polygon(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
-                (Shapes::Point(p), Shapes::Polygon(q)) => Euclidean.distance(p, q.as_ref()),
+                (Shapes::Point(p), Shapes::Polygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
                 (Shapes::LineString(p), Shapes::Polygon(q)) => Euclidean.distance(p, q.as_ref()),
                 (Shapes::MultiLineString(p), Shapes::Polygon(q)) => {
                     Euclidean.distance(p, q.as_ref())
                 }
-                (Shapes::MultiPolygon(p), Shapes::Point(q)) => Euclidean.distance(p, q),
+                (Shapes::MultiPolygon(p), Shapes::Point(q)) => Euclidean.distance(p, q.as_ref()),
                 (Shapes::MultiPolygon(p), Shapes::LineString(q)) => Euclidean.distance(p, q),
                 (Shapes::MultiPolygon(p), Shapes::MultiLineString(q)) => Euclidean.distance(p, q),
                 (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => Euclidean.distance(p, q.as_ref()),
                 (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p, q),
-                (Shapes::Point(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p, q),
+                (Shapes::Point(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p.as_ref(), q),
                 (Shapes::LineString(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p, q),
                 (Shapes::MultiLineString(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p, q),
                 (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p.as_ref(), q),
             }
         }
+
+        fn to_wkt(&self) -> String {
+            match &self.inner {
+                Shapes::Point(p) => p.as_ref().wkt_string(),
+                Shapes::LineString(p) => p.wkt_string(),
+                Shapes::MultiLineString(p) => p.wkt_string(),
+                Shapes::MultiPolygon(p) => p.wkt_string(),
+                Shapes::Polygon(p) => p.wkt_string(),
+            }
+        }
     }
 
-    // ys: &Vec<PyReadonlyArray2<'py, f64>>,
     #[pyfunction]
     fn union<'py>(py: Python<'py>, rust_polygons: Vec<RustPolygon>) -> PyResult<Py<PyAny>> {
         let polygons = rust_polygons
@@ -344,10 +369,19 @@ mod rust_geo_python {
         ));
         Ok(Py::new(py, initializer)?.into_any())
     }
+
     #[pyfunction]
-    fn count<'py>(py: Python<'py>, rust_points: Vec<RustPoint>) -> PyResult<()> {
+    fn count<'py>(rust_points: Vec<RustPoint>) -> PyResult<()> {
         println!("Some text {}", rust_points.len());
         Ok(())
+    }
+
+    #[pyfunction]
+    fn point_in_polygon<'py>(rust_point: RustPoint, rust_polygon: RustPolygon) -> PyResult<bool> {
+        let point = rust_point.point.as_ref();
+        let polygon = rust_polygon.polygon;
+        let is_in = polygon.as_ref().contains(point);
+        Ok(is_in)
     }
 
     #[pyfunction(name = "intersection")]
