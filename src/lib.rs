@@ -205,7 +205,7 @@ mod rust_geo_python {
         LineString(LineString),
         MultiLineString(MultiLineString),
         Polygon(Arc<Polygon>),
-        MultiPolygon(MultiPolygon),
+        MultiPolygon(Arc<MultiPolygon>),
     }
 
     #[pyclass(subclass)]
@@ -230,7 +230,9 @@ mod rust_geo_python {
     struct RustMultiLineString {}
 
     #[pyclass(extends=Shape)]
-    struct RustMultiPolygon {}
+    struct RustMultiPolygon {
+        polygons: Arc<MultiPolygon>,
+    }
 
     #[pymethods]
     impl RustLineString {
@@ -319,12 +321,28 @@ mod rust_geo_python {
                 .iter()
                 .map(|(x, ys)| array2_to_polygon(x, ys))
                 .collect::<Vec<Polygon>>();
+            let multipolygon = MultiPolygon(polygons);
+            let multipolygon_arc = Arc::new(multipolygon);
             (
-                RustMultiPolygon {},
+                RustMultiPolygon {
+                    polygons: multipolygon_arc.clone(),
+                },
                 Shape {
-                    inner: Shapes::MultiPolygon(MultiPolygon(polygons)),
+                    inner: Shapes::MultiPolygon(multipolygon_arc.clone()),
                 },
             )
+        }
+
+        fn xy<'py>(
+            &self,
+            py: Python<'py>,
+        ) -> PyResult<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>> {
+            let result_vec = self
+                .polygons
+                .iter()
+                .map(|x| polygon_to_array2(py, x))
+                .collect::<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>>();
+            Ok(result_vec)
         }
     }
 
