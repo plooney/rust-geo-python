@@ -231,7 +231,7 @@ mod rust_geo_python {
 
     #[pyclass(extends=Shape)]
     struct RustMultiPolygon {
-        polygons: Arc<MultiPolygon>,
+        multipolygon: Arc<MultiPolygon>,
     }
 
     #[pymethods]
@@ -325,7 +325,7 @@ mod rust_geo_python {
             let multipolygon_arc = Arc::new(multipolygon);
             (
                 RustMultiPolygon {
-                    polygons: multipolygon_arc.clone(),
+                    multipolygon: multipolygon_arc.clone(),
                 },
                 Shape {
                     inner: Shapes::MultiPolygon(multipolygon_arc.clone()),
@@ -338,7 +338,7 @@ mod rust_geo_python {
             py: Python<'py>,
         ) -> PyResult<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>> {
             let result_vec = self
-                .polygons
+                .multipolygon
                 .iter()
                 .map(|x| polygon_to_array2(py, x))
                 .collect::<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>>();
@@ -378,15 +378,33 @@ mod rust_geo_python {
                 (Shapes::MultiLineString(p), Shapes::Polygon(q)) => {
                     Euclidean.distance(p, q.as_ref())
                 }
-                (Shapes::MultiPolygon(p), Shapes::Point(q)) => Euclidean.distance(p, q.as_ref()),
-                (Shapes::MultiPolygon(p), Shapes::LineString(q)) => Euclidean.distance(p, q),
-                (Shapes::MultiPolygon(p), Shapes::MultiLineString(q)) => Euclidean.distance(p, q),
-                (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => Euclidean.distance(p, q.as_ref()),
-                (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p, q),
-                (Shapes::Point(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p.as_ref(), q),
-                (Shapes::LineString(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p, q),
-                (Shapes::MultiLineString(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p, q),
-                (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => Euclidean.distance(p.as_ref(), q),
+                (Shapes::MultiPolygon(p), Shapes::Point(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::LineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q)
+                }
+                (Shapes::MultiPolygon(p), Shapes::MultiLineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q)
+                }
+                (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::MultiPolygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::MultiPolygon(q)) => {
+                    Euclidean.distance(p, q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::MultiPolygon(q)) => {
+                    Euclidean.distance(p, q.as_ref())
+                }
+                (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
             }
         }
 
@@ -408,10 +426,13 @@ mod rust_geo_python {
                 Shapes::MultiPolygon(p) => p.buffer(radius),
                 Shapes::Polygon(p) => p.buffer(radius),
             };
+            let multipolygon_arc = Arc::new(polygons);
             let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
-                RustMultiPolygon {},
+                RustMultiPolygon {
+                    multipolygon: multipolygon_arc.clone(),
+                },
                 Shape {
-                    inner: Shapes::MultiPolygon(polygons),
+                    inner: Shapes::MultiPolygon(multipolygon_arc),
                 },
             ));
             Ok(Py::new(py, initializer)?.into_any())
@@ -425,10 +446,13 @@ mod rust_geo_python {
             .map(|x| x.polygon.as_ref())
             .collect::<Vec<&Polygon>>();
         let union = unary_union(polygons);
+        let multipolygon_arc = Arc::new(union);
         let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
-            RustMultiPolygon {},
+            RustMultiPolygon {
+                multipolygon: multipolygon_arc.clone(),
+            },
             Shape {
-                inner: Shapes::MultiPolygon(union),
+                inner: Shapes::MultiPolygon(multipolygon_arc),
             },
         ));
         Ok(Py::new(py, initializer)?.into_any())
@@ -457,10 +481,13 @@ mod rust_geo_python {
         let intersection = polygon_lhs
             .polygon
             .intersection(polygon_rhs.polygon.as_ref());
+        let multipolygon_arc = Arc::new(intersection);
         let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
-            RustMultiPolygon {},
+            RustMultiPolygon {
+                multipolygon: multipolygon_arc.clone(),
+            },
             Shape {
-                inner: Shapes::MultiPolygon(intersection),
+                inner: Shapes::MultiPolygon(multipolygon_arc),
             },
         ));
         Ok(Py::new(py, initializer)?.into_any())
