@@ -7,15 +7,14 @@ mod rust_geo_python {
     };
 
     use geo::{
-        BooleanOps, Contains, Distance, Euclidean, LineString, MultiLineString, MultiPolygon,
-        Point, Polygon, unary_union,
+        BooleanOps, Buffer, Contains, Distance, Euclidean, LineString, MultiLineString,
+        MultiPolygon, Point, Polygon, unary_union,
     };
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
-    use pyo3::prelude::*;
     use pyo3::{Bound, PyResult, Python};
+    use pyo3::{IntoPyObjectExt, prelude::*};
     use std::sync::Arc;
-    use wkb::writer;
     use wkt::ToWkt;
 
     fn point_poly_distance(x: ArrayView1<f64>, y: ArrayView2<f64>) -> f64 {
@@ -90,7 +89,7 @@ mod rust_geo_python {
     }
 
     fn array2_to_linestring<'py>(x: &PyReadonlyArray2<'py, f64>) -> LineString {
-        println!("shape x: {}, y: {}", x.shape()[0], x.shape()[1]);
+        assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
         let path = x
             .as_array()
             .axis_iter(Axis(0))
@@ -111,18 +110,23 @@ mod rust_geo_python {
         Polygon::new(exterior, interiors)
     }
 
-    fn linestring_to_array2<'py>(py: Python<'py>, ls: &LineString) -> Bound<'py, PyArray2<f64>> {
+    fn linestring_to_pyarray2<'py>(py: Python<'py>, ls: &LineString) -> Bound<'py, PyArray2<f64>> {
+        let arr = linestring_to_array(ls);
+        let pyarray = PyArray2::from_owned_array(py, arr);
+        pyarray
+    }
+
+    fn linestring_to_array<'py>(ls: &LineString) -> Array2<f64> {
         let n_points = ls.points().len();
-        let mut arr = Array2::zeros((2, n_points));
+        let mut arr = Array2::zeros((n_points, 2));
         let mut i = 0;
         ls.points().for_each(|p| {
             let (x, y) = p.x_y();
-            arr[[0, i]] = x;
-            arr[[1, i]] = y;
+            arr[[i, 0]] = x;
+            arr[[i, 1]] = y;
             i += 1;
         });
-        let pyarray = PyArray2::from_owned_array(py, arr);
-        pyarray
+        arr
     }
 
     fn polygons_to_array2<'py>(
@@ -133,15 +137,29 @@ mod rust_geo_python {
             .iter()
             .map(|p| {
                 let ext = p.exterior();
-                let ext_array = linestring_to_array2(py, ext);
+                let ext_array = linestring_to_pyarray2(py, ext);
                 let int_arrays = p
                     .interiors()
                     .iter()
-                    .map(|ls| linestring_to_array2(py, ls))
+                    .map(|ls| linestring_to_pyarray2(py, ls))
                     .collect::<Vec<Bound<'py, PyArray2<f64>>>>();
                 (ext_array, int_arrays)
             })
             .collect::<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>>()
+    }
+
+    fn polygon_to_array2<'py>(
+        py: Python<'py>,
+        polygon: &Polygon,
+    ) -> (Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>) {
+        let ext = polygon.exterior();
+        let ext_array = linestring_to_pyarray2(py, ext);
+        let int_arrays = polygon
+            .interiors()
+            .iter()
+            .map(|ls| linestring_to_pyarray2(py, ls))
+            .collect::<Vec<Bound<'py, PyArray2<f64>>>>();
+        (ext_array, int_arrays)
     }
 
     #[pyfunction]
@@ -219,7 +237,6 @@ mod rust_geo_python {
         #[new]
         fn new(x: PyReadonlyArray2<f64>) -> (Self, Shape) {
             let ls = array2_to_linestring(&x);
-            assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
             (
                 RustLineString {},
                 Shape {
@@ -244,6 +261,11 @@ mod rust_geo_python {
                 },
             )
         }
+
+        fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+            let xy = self.point.x_y();
+            xy.into_bound_py_any(py)
+        }
     }
 
     #[pymethods]
@@ -260,6 +282,13 @@ mod rust_geo_python {
                     inner: Shapes::Polygon(polygon_arc.clone()),
                 },
             )
+        }
+
+        fn xy<'py>(
+            &self,
+            py: Python<'py>,
+        ) -> PyResult<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)> {
+            Ok(polygon_to_array2(py, self.polygon.as_ref()))
         }
     }
 
@@ -351,6 +380,23 @@ mod rust_geo_python {
                 Shapes::MultiPolygon(p) => p.wkt_string(),
                 Shapes::Polygon(p) => p.wkt_string(),
             }
+        }
+
+        fn buffer<'py>(&self, py: Python<'py>, radius: f64) -> PyResult<Py<PyAny>> {
+            let polygons = match &self.inner {
+                Shapes::Point(p) => p.buffer(radius),
+                Shapes::LineString(p) => p.buffer(radius),
+                Shapes::MultiLineString(p) => p.buffer(radius),
+                Shapes::MultiPolygon(p) => p.buffer(radius),
+                Shapes::Polygon(p) => p.buffer(radius),
+            };
+            let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
+                RustMultiPolygon {},
+                Shape {
+                    inner: Shapes::MultiPolygon(polygons),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
         }
     }
 
