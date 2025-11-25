@@ -7,12 +7,12 @@ mod rust_geo_python {
     };
 
     use geo::{
-        BooleanOps, Buffer, Contains, Distance, Euclidean, HausdorffDistance, LineString,
+        BooleanOps, Buffer, Contains, Distance, Euclidean, LineString,
         MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
     };
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
-    use pyo3::types::PyNone;
+    
     use pyo3::{Bound, PyResult, Python};
     use pyo3::{IntoPyObjectExt, prelude::*};
     use std::sync::Arc;
