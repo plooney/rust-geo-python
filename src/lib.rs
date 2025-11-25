@@ -7,11 +7,12 @@ mod rust_geo_python {
     };
 
     use geo::{
-        BooleanOps, Buffer, Contains, Distance, Euclidean, LineString, MultiLineString,
-        MultiPolygon, Point, Polygon, unary_union,
+        BooleanOps, Buffer, Contains, Distance, Euclidean, HausdorffDistance, LineString,
+        MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
     };
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
+    use pyo3::types::PyNone;
     use pyo3::{Bound, PyResult, Python};
     use pyo3::{IntoPyObjectExt, prelude::*};
     use std::sync::Arc;
@@ -202,6 +203,7 @@ mod rust_geo_python {
     #[derive(Clone)]
     enum Shapes {
         Point(Arc<Point>),
+        MultiPoint(Arc<MultiPoint>),
         LineString(LineString),
         MultiLineString(MultiLineString),
         Polygon(Arc<Polygon>),
@@ -218,6 +220,11 @@ mod rust_geo_python {
     #[derive(Clone)]
     struct RustPoint {
         point: Arc<Point>,
+    }
+    #[pyclass(extends=Shape)]
+    #[derive(Clone)]
+    struct RustMultiPoint {
+        multipoint: Arc<MultiPoint>,
     }
     #[pyclass(extends=Shape)]
     struct RustLineString {}
@@ -243,6 +250,26 @@ mod rust_geo_python {
                 RustLineString {},
                 Shape {
                     inner: Shapes::LineString(ls),
+                },
+            )
+        }
+    }
+
+    #[pymethods]
+    impl RustMultiPoint {
+        #[new]
+        fn new(x: PyReadonlyArray2<f64>) -> (Self, Shape) {
+            let ls = array2_to_linestring(&x);
+
+            let multipoint = ls.points().collect::<MultiPoint>();
+            let multipoint_arc = Arc::new(multipoint);
+
+            (
+                RustMultiPoint {
+                    multipoint: multipoint_arc.clone(),
+                },
+                Shape {
+                    inner: Shapes::MultiPoint(multipoint_arc),
                 },
             )
         }
@@ -291,6 +318,20 @@ mod rust_geo_python {
             py: Python<'py>,
         ) -> PyResult<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)> {
             Ok(polygon_to_array2(py, self.polygon.as_ref()))
+        }
+
+        fn simplify<'py>(&self, py: Python<'py>, epsilon: f64) -> PyResult<Py<PyAny>> {
+            let simple_polygon = self.polygon.simplify(epsilon);
+            let polygon_arc = Arc::new(simple_polygon);
+            let initializer: PyClassInitializer<RustPolygon> = PyClassInitializer::from((
+                RustPolygon {
+                    polygon: polygon_arc.clone(),
+                },
+                Shape {
+                    inner: Shapes::Polygon(polygon_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
         }
     }
 
@@ -343,6 +384,20 @@ mod rust_geo_python {
                 .map(|x| polygon_to_array2(py, x))
                 .collect::<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>>();
             Ok(result_vec)
+        }
+
+        fn simplify<'py>(&self, py: Python<'py>, epsilon: f64) -> PyResult<Py<PyAny>> {
+            let simple_polygon = self.multipolygon.simplify(epsilon);
+            let multipolygon_arc = Arc::new(simple_polygon);
+            let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
+                RustMultiPolygon {
+                    multipolygon: multipolygon_arc.clone(),
+                },
+                Shape {
+                    inner: Shapes::MultiPolygon(multipolygon_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
         }
     }
 
@@ -405,12 +460,42 @@ mod rust_geo_python {
                 (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
+                (Shapes::MultiPoint(p), Shapes::Point(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::LineString(q)) => Euclidean.distance(p.as_ref(), q),
+                (Shapes::MultiPoint(p), Shapes::MultiLineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q)
+                }
+                (Shapes::MultiPoint(p), Shapes::Polygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::MultiPolygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::MultiPoint(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::MultiPoint(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::MultiPoint(q)) => Euclidean.distance(p, q.as_ref()),
+                (Shapes::MultiLineString(p), Shapes::MultiPoint(q)) => {
+                    Euclidean.distance(p, q.as_ref())
+                }
+                (Shapes::Polygon(p), Shapes::MultiPoint(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::MultiPoint(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
             }
         }
 
         fn to_wkt(&self) -> String {
             match &self.inner {
                 Shapes::Point(p) => p.as_ref().wkt_string(),
+                Shapes::MultiPoint(p) => p.as_ref().wkt_string(),
                 Shapes::LineString(p) => p.wkt_string(),
                 Shapes::MultiLineString(p) => p.wkt_string(),
                 Shapes::MultiPolygon(p) => p.wkt_string(),
@@ -421,6 +506,7 @@ mod rust_geo_python {
         fn buffer<'py>(&self, py: Python<'py>, radius: f64) -> PyResult<Py<PyAny>> {
             let polygons = match &self.inner {
                 Shapes::Point(p) => p.buffer(radius),
+                Shapes::MultiPoint(p) => p.buffer(radius),
                 Shapes::LineString(p) => p.buffer(radius),
                 Shapes::MultiLineString(p) => p.buffer(radius),
                 Shapes::MultiPolygon(p) => p.buffer(radius),
@@ -436,6 +522,81 @@ mod rust_geo_python {
                 },
             ));
             Ok(Py::new(py, initializer)?.into_any())
+        }
+
+        fn boundary<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
+            match &self.inner {
+                Shapes::Point(_) => Ok(py.None()),
+                Shapes::MultiPoint(_) => Ok(py.None()),
+                Shapes::LineString(p) => {
+                    let multipoint = p.points().collect::<MultiPoint>();
+                    let multipoint_arc = Arc::new(multipoint);
+                    let initializer: PyClassInitializer<RustMultiPoint> =
+                        PyClassInitializer::from((
+                            RustMultiPoint {
+                                multipoint: multipoint_arc.clone(),
+                            },
+                            Shape {
+                                inner: Shapes::MultiPoint(multipoint_arc),
+                            },
+                        ));
+                    Ok(Py::new(py, initializer)?.into_any())
+                }
+                Shapes::MultiLineString(p) => {
+                    let points: Vec<Point<f64>> = Vec::new();
+
+                    let multipoint = MultiPoint::new(p.iter().fold(points, |mut points, x| {
+                        points.extend(&x.clone().into_points());
+                        points
+                    }));
+
+                    let multipoint_arc = Arc::new(multipoint);
+                    let initializer: PyClassInitializer<RustMultiPoint> =
+                        PyClassInitializer::from((
+                            RustMultiPoint {
+                                multipoint: multipoint_arc.clone(),
+                            },
+                            Shape {
+                                inner: Shapes::MultiPoint(multipoint_arc),
+                            },
+                        ));
+                    Ok(Py::new(py, initializer)?.into_any())
+                }
+                Shapes::MultiPolygon(p) => {
+                    let lss: Vec<LineString<f64>> = Vec::new();
+
+                    let multilinestring = MultiLineString::new(p.iter().fold(lss, |mut lss, x| {
+                        lss.push(x.exterior().clone());
+                        lss.extend(x.interiors().to_vec());
+                        lss
+                    }));
+
+                    let initializer: PyClassInitializer<RustMultiLineString> =
+                        PyClassInitializer::from((
+                            RustMultiLineString {},
+                            Shape {
+                                inner: Shapes::MultiLineString(multilinestring),
+                            },
+                        ));
+                    Ok(Py::new(py, initializer)?.into_any())
+                }
+                Shapes::Polygon(p) => {
+                    let mut lss: Vec<LineString<f64>> = Vec::new();
+                    lss.push(p.exterior().clone());
+                    lss.extend(p.interiors().to_vec());
+
+                    let multilinestring = MultiLineString::new(lss);
+
+                    let initializer: PyClassInitializer<RustMultiLineString> =
+                        PyClassInitializer::from((
+                            RustMultiLineString {},
+                            Shape {
+                                inner: Shapes::MultiLineString(multilinestring),
+                            },
+                        ));
+                    Ok(Py::new(py, initializer)?.into_any())
+                }
+            }
         }
     }
 
