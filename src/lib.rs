@@ -6,13 +6,13 @@ mod rust_geo_python {
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
     };
 
+    use geo::orient::{Direction, Orient};
     use geo::{
-        BooleanOps, Buffer, Contains, Distance, Euclidean, LineString,
+        Area, BooleanOps, Buffer, Contains, Distance, Euclidean, HausdorffDistance, LineString,
         MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
     };
     use ndarray::parallel::prelude::IntoParallelIterator;
     use ndarray::{ArrayView1, ArrayView2};
-    
     use pyo3::{Bound, PyResult, Python};
     use pyo3::{IntoPyObjectExt, prelude::*};
     use std::sync::Arc;
@@ -130,6 +130,19 @@ mod rust_geo_python {
         arr
     }
 
+    fn multipoint_to_array<'py>(mp: &MultiPoint) -> Array2<f64> {
+        let n_points = mp.len();
+        let mut arr = Array2::zeros((n_points, 2));
+        let mut i = 0;
+        mp.iter().for_each(|p| {
+            let (x, y) = p.x_y();
+            arr[[i, 0]] = x;
+            arr[[i, 1]] = y;
+            i += 1;
+        });
+        arr
+    }
+
     fn polygons_to_array2<'py>(
         py: Python<'py>,
         polygons: Vec<&Polygon>,
@@ -204,8 +217,8 @@ mod rust_geo_python {
     enum Shapes {
         Point(Arc<Point>),
         MultiPoint(Arc<MultiPoint>),
-        LineString(LineString),
-        MultiLineString(MultiLineString),
+        LineString(Arc<LineString>),
+        MultiLineString(Arc<MultiLineString>),
         Polygon(Arc<Polygon>),
         MultiPolygon(Arc<MultiPolygon>),
     }
@@ -227,14 +240,18 @@ mod rust_geo_python {
         multipoint: Arc<MultiPoint>,
     }
     #[pyclass(extends=Shape)]
-    struct RustLineString {}
+    struct RustLineString {
+        linestring: Arc<LineString>,
+    }
     #[pyclass(extends=Shape)]
     #[derive(Clone)]
     struct RustPolygon {
         polygon: Arc<Polygon>,
     }
     #[pyclass(extends=Shape)]
-    struct RustMultiLineString {}
+    struct RustMultiLineString {
+        multilinestring: Arc<MultiLineString>,
+    }
 
     #[pyclass(extends=Shape)]
     struct RustMultiPolygon {
@@ -246,12 +263,21 @@ mod rust_geo_python {
         #[new]
         fn new(x: PyReadonlyArray2<f64>) -> (Self, Shape) {
             let ls = array2_to_linestring(&x);
+            let ls_arc = Arc::new(ls);
             (
-                RustLineString {},
+                RustLineString {
+                    linestring: ls_arc.clone(),
+                },
                 Shape {
-                    inner: Shapes::LineString(ls),
+                    inner: Shapes::LineString(ls_arc),
                 },
             )
+        }
+
+        fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+            let arr = linestring_to_array(&self.linestring);
+            let pyarray = PyArray2::from_owned_array(py, arr);
+            Ok(pyarray)
         }
     }
 
@@ -273,6 +299,12 @@ mod rust_geo_python {
                 },
             )
         }
+
+        fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+            let arr = multipoint_to_array(&self.multipoint);
+            let pyarray = PyArray2::from_owned_array(py, arr);
+            Ok(pyarray)
+        }
     }
 
     #[pymethods]
@@ -286,7 +318,7 @@ mod rust_geo_python {
                     point: point_arc.clone(),
                 },
                 Shape {
-                    inner: Shapes::Point(point_arc.clone()),
+                    inner: Shapes::Point(point_arc),
                 },
             )
         }
@@ -301,14 +333,14 @@ mod rust_geo_python {
     impl RustPolygon {
         #[new]
         fn new(x: PyReadonlyArray2<f64>, ys: Vec<PyReadonlyArray2<f64>>) -> (Self, Shape) {
-            let polygon = array2_to_polygon(&x, &ys);
+            let polygon = array2_to_polygon(&x, &ys).orient(Direction::Default);
             let polygon_arc = Arc::new(polygon);
             (
                 RustPolygon {
                     polygon: polygon_arc.clone(),
                 },
                 Shape {
-                    inner: Shapes::Polygon(polygon_arc.clone()),
+                    inner: Shapes::Polygon(polygon_arc),
                 },
             )
         }
@@ -333,6 +365,10 @@ mod rust_geo_python {
             ));
             Ok(Py::new(py, initializer)?.into_any())
         }
+
+        fn area(&self) -> f64 {
+            self.polygon.signed_area()
+        }
     }
 
     #[pymethods]
@@ -343,12 +379,24 @@ mod rust_geo_python {
                 .iter()
                 .map(|x| array2_to_linestring(x))
                 .collect::<MultiLineString>();
+            let lss_arc = Arc::new(lss);
             (
-                RustMultiLineString {},
+                RustMultiLineString {
+                    multilinestring: lss_arc.clone(),
+                },
                 Shape {
-                    inner: Shapes::MultiLineString(lss),
+                    inner: Shapes::MultiLineString(lss_arc),
                 },
             )
+        }
+
+        fn xy<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyArray2<f64>>>> {
+            let pyarrays = self
+                .multilinestring
+                .iter()
+                .map(|x| linestring_to_pyarray2(py, x))
+                .collect::<Vec<Bound<'py, PyArray2<f64>>>>();
+            Ok(pyarrays)
         }
     }
 
@@ -360,7 +408,7 @@ mod rust_geo_python {
         ) -> (Self, Shape) {
             let polygons = pyarrays
                 .iter()
-                .map(|(x, ys)| array2_to_polygon(x, ys))
+                .map(|(x, ys)| array2_to_polygon(&x, &ys).orient(Direction::Default))
                 .collect::<Vec<Polygon>>();
             let multipolygon = MultiPolygon(polygons);
             let multipolygon_arc = Arc::new(multipolygon);
@@ -369,7 +417,7 @@ mod rust_geo_python {
                     multipolygon: multipolygon_arc.clone(),
                 },
                 Shape {
-                    inner: Shapes::MultiPolygon(multipolygon_arc.clone()),
+                    inner: Shapes::MultiPolygon(multipolygon_arc),
                 },
             )
         }
@@ -399,6 +447,10 @@ mod rust_geo_python {
             ));
             Ok(Py::new(py, initializer)?.into_any())
         }
+
+        fn area(&self) -> f64 {
+            self.multipolygon.signed_area()
+        }
     }
 
     #[pymethods]
@@ -406,22 +458,38 @@ mod rust_geo_python {
         fn distance(&self, rhs: &Shape) -> f64 {
             match (&self.inner, &rhs.inner) {
                 (Shapes::Point(p), Shapes::Point(q)) => Euclidean.distance(p.as_ref(), q.as_ref()),
-                (Shapes::LineString(p), Shapes::Point(q)) => Euclidean.distance(p, q.as_ref()),
-                (Shapes::Point(p), Shapes::LineString(q)) => Euclidean.distance(p.as_ref(), q),
-                (Shapes::LineString(p), Shapes::LineString(q)) => Euclidean.distance(p, q),
-                (Shapes::MultiLineString(p), Shapes::Point(q)) => Euclidean.distance(p, q.as_ref()),
-                (Shapes::MultiLineString(p), Shapes::LineString(q)) => Euclidean.distance(p, q),
-                (Shapes::MultiLineString(p), Shapes::MultiLineString(q)) => {
-                    Euclidean.distance(p, q)
+                (Shapes::LineString(p), Shapes::Point(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
-                (Shapes::Point(p), Shapes::MultiLineString(q)) => Euclidean.distance(p.as_ref(), q),
-                (Shapes::LineString(p), Shapes::MultiLineString(q)) => Euclidean.distance(p, q),
+                (Shapes::Point(p), Shapes::LineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::LineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::Point(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::LineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::MultiLineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::MultiLineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::MultiLineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
                 (Shapes::Polygon(p), Shapes::Point(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
-                (Shapes::Polygon(p), Shapes::LineString(q)) => Euclidean.distance(p.as_ref(), q),
+                (Shapes::Polygon(p), Shapes::LineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
                 (Shapes::Polygon(p), Shapes::MultiLineString(q)) => {
-                    Euclidean.distance(p.as_ref(), q)
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::Polygon(p), Shapes::Polygon(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
@@ -429,18 +497,20 @@ mod rust_geo_python {
                 (Shapes::Point(p), Shapes::Polygon(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
-                (Shapes::LineString(p), Shapes::Polygon(q)) => Euclidean.distance(p, q.as_ref()),
+                (Shapes::LineString(p), Shapes::Polygon(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
                 (Shapes::MultiLineString(p), Shapes::Polygon(q)) => {
-                    Euclidean.distance(p, q.as_ref())
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::MultiPolygon(p), Shapes::Point(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::MultiPolygon(p), Shapes::LineString(q)) => {
-                    Euclidean.distance(p.as_ref(), q)
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::MultiPolygon(p), Shapes::MultiLineString(q)) => {
-                    Euclidean.distance(p.as_ref(), q)
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
@@ -452,10 +522,10 @@ mod rust_geo_python {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::LineString(p), Shapes::MultiPolygon(q)) => {
-                    Euclidean.distance(p, q.as_ref())
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::MultiLineString(p), Shapes::MultiPolygon(q)) => {
-                    Euclidean.distance(p, q.as_ref())
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
@@ -463,9 +533,11 @@ mod rust_geo_python {
                 (Shapes::MultiPoint(p), Shapes::Point(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
-                (Shapes::MultiPoint(p), Shapes::LineString(q)) => Euclidean.distance(p.as_ref(), q),
+                (Shapes::MultiPoint(p), Shapes::LineString(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
                 (Shapes::MultiPoint(p), Shapes::MultiLineString(q)) => {
-                    Euclidean.distance(p.as_ref(), q)
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::MultiPoint(p), Shapes::Polygon(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
@@ -479,15 +551,124 @@ mod rust_geo_python {
                 (Shapes::Point(p), Shapes::MultiPoint(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
-                (Shapes::LineString(p), Shapes::MultiPoint(q)) => Euclidean.distance(p, q.as_ref()),
+                (Shapes::LineString(p), Shapes::MultiPoint(q)) => {
+                    Euclidean.distance(p.as_ref(), q.as_ref())
+                }
                 (Shapes::MultiLineString(p), Shapes::MultiPoint(q)) => {
-                    Euclidean.distance(p, q.as_ref())
+                    Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::Polygon(p), Shapes::MultiPoint(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
                 }
                 (Shapes::MultiPolygon(p), Shapes::MultiPoint(q)) => {
                     Euclidean.distance(p.as_ref(), q.as_ref())
+                }
+            }
+        }
+
+        fn hausdorff_distance(&self, rhs: &Shape) -> f64 {
+            match (&self.inner, &rhs.inner) {
+                (Shapes::Point(p), Shapes::Point(q)) => p.as_ref().hausdorff_distance(q.as_ref()),
+                (Shapes::LineString(p), Shapes::Point(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::LineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::LineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::Point(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::LineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::MultiLineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::MultiLineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::MultiLineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Polygon(p), Shapes::Point(q)) => p.as_ref().hausdorff_distance(q.as_ref()),
+                (Shapes::Polygon(p), Shapes::LineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Polygon(p), Shapes::MultiLineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Polygon(p), Shapes::Polygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::Polygon(q)) => p.as_ref().hausdorff_distance(q.as_ref()),
+                (Shapes::LineString(p), Shapes::Polygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::Polygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::Point(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::LineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::MultiLineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::MultiPolygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::MultiPolygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::MultiPolygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::Point(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::LineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::MultiLineString(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::Polygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::MultiPolygon(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPoint(p), Shapes::MultiPoint(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Point(p), Shapes::MultiPoint(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::LineString(p), Shapes::MultiPoint(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiLineString(p), Shapes::MultiPoint(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::Polygon(p), Shapes::MultiPoint(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
+                }
+                (Shapes::MultiPolygon(p), Shapes::MultiPoint(q)) => {
+                    p.as_ref().hausdorff_distance(q.as_ref())
                 }
             }
         }
@@ -570,12 +751,15 @@ mod rust_geo_python {
                         lss.extend(x.interiors().to_vec());
                         lss
                     }));
+                    let multilinestring_arc = Arc::new(multilinestring);
 
                     let initializer: PyClassInitializer<RustMultiLineString> =
                         PyClassInitializer::from((
-                            RustMultiLineString {},
+                            RustMultiLineString {
+                                multilinestring: multilinestring_arc.clone(),
+                            },
                             Shape {
-                                inner: Shapes::MultiLineString(multilinestring),
+                                inner: Shapes::MultiLineString(multilinestring_arc),
                             },
                         ));
                     Ok(Py::new(py, initializer)?.into_any())
@@ -587,11 +771,15 @@ mod rust_geo_python {
 
                     let multilinestring = MultiLineString::new(lss);
 
+                    let multilinestring_arc = Arc::new(multilinestring);
+
                     let initializer: PyClassInitializer<RustMultiLineString> =
                         PyClassInitializer::from((
-                            RustMultiLineString {},
+                            RustMultiLineString {
+                                multilinestring: multilinestring_arc.clone(),
+                            },
                             Shape {
-                                inner: Shapes::MultiLineString(multilinestring),
+                                inner: Shapes::MultiLineString(multilinestring_arc),
                             },
                         ));
                     Ok(Py::new(py, initializer)?.into_any())
