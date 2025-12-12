@@ -797,3 +797,11 @@ pub fn union<'py>(py: Python<'py>, rust_polygons: Vec<RustPolygon>) -> PyResult<
     ));
     Ok(Py::new(py, initializer)?.into_any())
 }
+
+#[pyfunction]
+pub fn point_in_polygon<'py>(rust_point: RustPoint, rust_polygon: RustPolygon) -> PyResult<bool> {
+    let point = rust_point.point.as_ref();
+    let polygon = rust_polygon.polygon;
+    let is_in = polygon.as_ref().contains(point);
+    Ok(is_in)
+}
