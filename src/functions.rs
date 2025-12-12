@@ -1,16 +1,9 @@
-use geo::{
-    Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
-    LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
-};
-use ndarray::parallel::prelude::ParallelIterator;
+use geo::{Distance, Euclidean, LineString, Point, Polygon};
 use ndarray::{ArrayView1, ArrayView2};
-use numpy::ndarray::{Array1, Array2, Axis};
-use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
-};
+use numpy::ndarray::{Array2, Axis};
+use numpy::{PyArray2, PyReadonlyArray2, PyUntypedArrayMethods};
 
-use pyo3::{Bound, PyResult, Python};
-use pyo3::{IntoPyObjectExt, prelude::*};
+use pyo3::{Bound, Python};
 
 pub fn point_poly_distance(x: ArrayView1<f64>, y: ArrayView2<f64>) -> f64 {
     let path = y

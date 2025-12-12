@@ -1,16 +1,11 @@
-use ndarray::parallel::prelude::ParallelIterator;
-use numpy::ndarray::{Array1, Array2, Axis};
-use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
-};
+use numpy::ndarray::{Array2, Axis};
+use numpy::{PyArray2, PyReadonlyArray2, PyUntypedArrayMethods};
 
 use geo::orient::{Direction, Orient};
 use geo::{
     Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
     LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
 };
-use ndarray::parallel::prelude::IntoParallelIterator;
-use ndarray::{ArrayView1, ArrayView2};
 use pyo3::{Bound, PyResult, Python};
 use pyo3::{IntoPyObjectExt, prelude::*};
 use std::sync::Arc;
@@ -68,25 +63,6 @@ fn multipoint_to_array<'py>(mp: &MultiPoint) -> Array2<f64> {
         i += 1;
     });
     arr
-}
-
-fn polygons_to_array2<'py>(
-    py: Python<'py>,
-    polygons: Vec<&Polygon>,
-) -> Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)> {
-    polygons
-        .iter()
-        .map(|p| {
-            let ext = p.exterior();
-            let ext_array = linestring_to_pyarray2(py, ext);
-            let int_arrays = p
-                .interiors()
-                .iter()
-                .map(|ls| linestring_to_pyarray2(py, ls))
-                .collect::<Vec<Bound<'py, PyArray2<f64>>>>();
-            (ext_array, int_arrays)
-        })
-        .collect::<Vec<(Bound<'py, PyArray2<f64>>, Vec<Bound<'py, PyArray2<f64>>>)>>()
 }
 
 fn polygon_to_array2<'py>(

@@ -3,15 +3,15 @@ use ndarray::parallel::prelude::IntoParallelIterator;
 use ndarray::parallel::prelude::ParallelIterator;
 
 use geo::{
-    Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
-    LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
+    BooleanOps, Distance, Euclidean,
+    LineString, Point, Polygon, unary_union,
 };
-use numpy::ndarray::{Array1, Array2, Axis};
+use numpy::ndarray::{Array1, Axis};
 use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
+    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
 };
 use pyo3::{Bound, PyResult, Python};
-use pyo3::{IntoPyObjectExt, prelude::*};
+use pyo3::prelude::*;
 
 #[pyfunction(name = "point_polygon_distance")]
 pub fn point_poly_distance_py<'py>(
