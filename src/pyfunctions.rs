@@ -1,10 +1,11 @@
 use crate::functions::{array2_to_polygon, point_poly_distance, polygons_to_array2};
+use ndarray::parallel::prelude::IntoParallelIterator;
+use ndarray::parallel::prelude::ParallelIterator;
 
 use geo::{
     Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
     LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
 };
-use ndarray::parallel::prelude::ParallelIterator;
 use numpy::ndarray::{Array1, Array2, Axis};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
