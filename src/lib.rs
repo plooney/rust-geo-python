@@ -26,5 +26,5 @@ mod rust_geo_python {
     };
 
     #[pymodule_export]
-    use crate::pyfunctions::union;
+    use crate::pyfunctions::{point_poly_distance_py, poly_poly_distance_py, union_set_shapes};
 }
