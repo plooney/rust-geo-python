@@ -16,7 +16,10 @@ geo = { version = "0.32.0" }
 wkt = "0.14.0"
 wkb = "0.9.1"
 
-[workspace]
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3 
 
 [tool.cibuildwheel.macos.environment]
 MACOSX_DEPLOYMENT_TARGET = "10.12"
@@ -26,6 +29,6 @@ skip = ["*-musllinux_i686"]
 
 [target.x86_64-apple-darwin]
 rustflags = [
-  "-C", "link-arg=-undefined",
-  "-C", "link-arg=dynamic_lookup",
+	"-C", "link-arg=-undefined",
+	"-C", "link-arg=dynamic_lookup",
 ]

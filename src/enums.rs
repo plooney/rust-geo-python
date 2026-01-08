@@ -1,11 +1,19 @@
-use numpy::ndarray::{Array2, Axis};
-use numpy::{PyArray2, PyReadonlyArray2, PyUntypedArrayMethods};
+use ndarray::parallel::prelude::IntoParallelIterator;
+use ndarray::parallel::prelude::IntoParallelRefIterator;
+use ndarray::parallel::prelude::ParallelIterator;
+use numpy::ToPyArray;
+use numpy::ndarray::{Array1, Array2, Axis};
+use numpy::{
+    IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods,
+};
 
 use geo::orient::{Direction, Orient};
 use geo::{
     Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
-    LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify, unary_union,
+    Intersects, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify,
+    unary_union,
 };
+use pyo3::exceptions::PyTypeError;
 use pyo3::{Bound, PyResult, Python};
 use pyo3::{IntoPyObjectExt, prelude::*};
 use std::sync::Arc;
@@ -645,6 +653,61 @@ impl Shape {
         }
     }
 
+    fn intersects(&self, rhs: &Shape) -> bool {
+        match (&self.inner, &rhs.inner) {
+            (Shapes::Point(p), Shapes::Point(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::LineString(p), Shapes::Point(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::Point(p), Shapes::LineString(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::LineString(p), Shapes::LineString(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Point(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::LineString(q)) => {
+                p.as_ref().intersects(q.as_ref())
+            }
+            (Shapes::MultiLineString(p), Shapes::MultiLineString(q)) => {
+                p.as_ref().intersects(q.as_ref())
+            }
+            (Shapes::Point(p), Shapes::MultiLineString(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::LineString(p), Shapes::MultiLineString(q)) => {
+                p.as_ref().intersects(q.as_ref())
+            }
+            (Shapes::Polygon(p), Shapes::Point(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::Polygon(p), Shapes::LineString(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::Polygon(p), Shapes::MultiLineString(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::Polygon(p), Shapes::Polygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::Point(p), Shapes::Polygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::LineString(p), Shapes::Polygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Polygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::Point(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::LineString(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::MultiLineString(q)) => {
+                p.as_ref().intersects(q.as_ref())
+            }
+            (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::Point(p), Shapes::MultiPolygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::LineString(p), Shapes::MultiPolygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::MultiPolygon(q)) => {
+                p.as_ref().intersects(q.as_ref())
+            }
+            (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::Point(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::LineString(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::MultiLineString(q)) => {
+                p.as_ref().intersects(q.as_ref())
+            }
+            (Shapes::MultiPoint(p), Shapes::Polygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::MultiPolygon(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::MultiPoint(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::Point(p), Shapes::MultiPoint(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::LineString(p), Shapes::MultiPoint(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::MultiPoint(q)) => {
+                p.as_ref().intersects(q.as_ref())
+            }
+            (Shapes::Polygon(p), Shapes::MultiPoint(q)) => p.as_ref().intersects(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::MultiPoint(q)) => p.as_ref().intersects(q.as_ref()),
+        }
+    }
+
     fn to_wkt(&self) -> String {
         match &self.inner {
             Shapes::Point(p) => p.as_ref().wkt_string(),
@@ -675,6 +738,51 @@ impl Shape {
             },
         ));
         Ok(Py::new(py, initializer)?.into_any())
+    }
+
+    fn intersection<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
+        match (&self.inner, &rhs.inner) {
+            (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().intersection(q.as_ref()))
+            }
+            (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().intersection(q.as_ref()))
+            }
+            (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().intersection(q.as_ref()))
+            }
+            (_, _) => Err(PyTypeError::new_err("Not implemented yet")),
+        }
+    }
+
+    fn union<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
+        match (&self.inner, &rhs.inner) {
+            (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().union(q.as_ref()))
+            }
+            (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().union(q.as_ref()))
+            }
+            (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().union(q.as_ref()))
+            }
+            (_, _) => Err(PyTypeError::new_err("Not implemented yet")),
+        }
+    }
+
+    fn difference<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
+        match (&self.inner, &rhs.inner) {
+            (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().difference(q.as_ref()))
+            }
+            (Shapes::Polygon(p), Shapes::MultiPolygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().difference(q.as_ref()))
+            }
+            (Shapes::MultiPolygon(p), Shapes::MultiPolygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().difference(q.as_ref()))
+            }
+            (_, _) => Err(PyTypeError::new_err("Not implemented yet")),
+        }
     }
 
     fn boundary<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
@@ -779,6 +887,19 @@ pub fn intersection<'py>(
     Ok(Py::new(py, initializer)?.into_any())
 }
 
+pub fn mpg_to_pyany<'py>(py: Python<'py>, mpg: MultiPolygon) -> PyResult<Py<PyAny>> {
+    let multipolygon_arc = Arc::new(mpg);
+    let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
+        RustMultiPolygon {
+            multipolygon: multipolygon_arc.clone(),
+        },
+        Shape {
+            inner: Shapes::MultiPolygon(multipolygon_arc),
+        },
+    ));
+    Ok(Py::new(py, initializer)?.into_any())
+}
+
 #[pyfunction]
 pub fn union<'py>(py: Python<'py>, rust_polygons: Vec<RustPolygon>) -> PyResult<Py<PyAny>> {
     let polygons = rust_polygons
@@ -805,3 +926,170 @@ pub fn point_in_polygon<'py>(rust_point: RustPoint, rust_polygon: RustPolygon) -
     let is_in = polygon.as_ref().contains(point);
     Ok(is_in)
 }
+
+#[pyclass(subclass)]
+#[derive(Clone)]
+pub struct RustPointCollection {
+    points: Vec<Point>,
+}
+
+fn array2_to_points<'py>(x: &PyReadonlyArray2<'py, f64>) -> Vec<Point<f64>> {
+    assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
+    let points = x
+        .as_array()
+        .axis_iter(Axis(0))
+        .map(|y| Point::new(y[0], y[1]))
+        .collect::<Vec<Point<f64>>>();
+    points
+}
+
+fn points_to_array<'py>(points: &Vec<Point<f64>>) -> Array2<f64> {
+    let n_points = points.len();
+    let mut arr = Array2::zeros((n_points, 2));
+    let mut i = 0;
+    points.iter().for_each(|p| {
+        let (x, y) = p.x_y();
+        arr[[i, 0]] = x;
+        arr[[i, 1]] = y;
+        i += 1;
+    });
+    arr
+}
+
+#[pymethods]
+impl RustPointCollection {
+    #[new]
+    fn new(x: PyReadonlyArray2<f64>) -> Self {
+        let points = array2_to_points(&x);
+        RustPointCollection { points: points }
+    }
+
+    fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let arr = points_to_array(&self.points);
+        let pyarray = PyArray2::from_owned_array(py, arr);
+        Ok(pyarray)
+    }
+
+    fn distance_ls<'py>(
+        &self,
+        py: Python<'py>,
+        ls: &RustLineString,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        let arr = self
+            .points
+            .iter()
+            .map(|p| Euclidean.distance(p, ls.linestring.as_ref()))
+            .collect::<Array1<f64>>();
+        let pyarray = PyArray1::from_owned_array(py, arr);
+        Ok(pyarray)
+    }
+
+    fn distance_points<'py>(
+        &self,
+        py: Python<'py>,
+        other: &RustPointCollection,
+    ) -> Bound<'py, PyArray2<f64>> {
+        let n_points = self.points.len();
+        let n_points_other = other.points.len();
+        let index = (0..n_points)
+            //.into_par_iter()
+            .flat_map(|i| (0..n_points_other).map(move |j| (i, j)));
+
+        let shape = (n_points, n_points_other);
+        let mut arr = Array2::zeros(shape);
+        //let pyarray2 = PyArray2::<f64>::zeros(py, shape, false);
+        //
+
+        index.for_each(|(i, j)| {
+            let a = self.points.get(i);
+            let b = other.points.get(j);
+            if let (Some(p), Some(q)) = (a, b) {
+                let d = Euclidean.distance(p, q);
+                arr[[i, j]] = d;
+            }
+        });
+
+        arr.to_pyarray(py)
+    }
+
+    //fn distance_points<'py>(
+    //    &self,
+    //    py: Python<'py>,
+    //    other: &RustPointCollection,
+    //) -> Bound<'py, PyArray2<f64>> {
+    //    let n = self.points.len();
+    //    let m = other.points.len();
+
+    //    let mut ds = Vec::with_capacity(n * m);
+
+    //    ds.extend(self.points.iter().flat_map(|p| {
+    //        other.points.iter().map(move |q| {
+    //            let d = (((p.x() - q.x()) * (p.x() - q.x())) + ((p.y() - q.y()) * (p.y() - q.y())))
+    //                .sqrt();
+    //            d
+    //        })
+    //    }));
+
+    //    let arr = Array2::from_shape_vec((n, m), ds).unwrap();
+    //    arr.into_pyarray(py)
+    //}
+}
+
+//#[pyclass(subclass)]
+//#[derive(Clone)]
+//pub struct RustLineStringCollection {
+//    lss: Vec<LineString>,
+//}
+//
+//#[pymethods]
+//impl RustLineStringCollection {
+//    #[new]
+//    fn new(x: Vec<PyReadonlyArray2<f64>>) -> Self {
+//        let lss = vec_array2_to_lss(&x);
+//        RustLineStringCollection { lss: lss }
+//    }
+//
+//    fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+//        let vec_arr = linestrings_to_vec_array(&self.lss);
+//        let pyarray = PyArray2::from_owned_array(py, arr);
+//        Ok(pyarray)
+//    }
+//
+//    fn distance_ls<'py>(
+//        &self,
+//        py: Python<'py>,
+//        ls_other: &RustLineString,
+//    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+//        let arr = self
+//            .lss
+//            .iter()
+//            .map(|ls| Euclidean.distance(ls, ls_other.linestring.as_ref()))
+//            .collect::<Array1<f64>>();
+//        //    into_iter()
+//
+//        let pyarray = PyArray1::from_owned_array(py, arr);
+//        Ok(pyarray)
+//    }
+//
+//    fn distance_points<'py>(
+//        &self,
+//        py: Python<'py>,
+//        other: &RustPointCollection,
+//    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+//        let n_points = self.points.len();
+//        let n_points_other = other.points.len();
+//        let mut arr = Array2::zeros((n_points, n_points_other));
+//        let mut i = 0;
+//        self.points.iter().for_each(|p| {
+//            let mut j = 0;
+//            other.points.iter().for_each(|q| {
+//                arr[[i, j]] = Euclidean.distance(p, q);
+//                j += 1;
+//            });
+//            i += 1;
+//        });
+//
+//        let pyarray = PyArray2::from_owned_array(py, arr);
+//        Ok(pyarray)
+//    }
+//}
