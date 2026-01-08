@@ -1,10 +1,8 @@
-use ndarray::parallel::prelude::IntoParallelIterator;
-use ndarray::parallel::prelude::IntoParallelRefIterator;
 use ndarray::parallel::prelude::ParallelIterator;
 use numpy::ToPyArray;
 use numpy::ndarray::{Array1, Array2, Axis};
 use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods,
+    PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods,
 };
 
 use geo::orient::{Direction, Orient};
