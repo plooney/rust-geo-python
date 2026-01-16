@@ -1,9 +1,7 @@
 use ndarray::parallel::prelude::ParallelIterator;
 use numpy::ToPyArray;
 use numpy::ndarray::{Array1, Array2, Axis};
-use numpy::{
-    PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods,
-};
+use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods};
 
 use geo::orient::{Direction, Orient};
 use geo::{
@@ -740,6 +738,9 @@ impl Shape {
 
     fn intersection<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
         match (&self.inner, &rhs.inner) {
+            (Shapes::Polygon(p), Shapes::Polygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().intersection(q.as_ref()))
+            }
             (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
                 mpg_to_pyany(py, p.as_ref().intersection(q.as_ref()))
             }
@@ -755,6 +756,9 @@ impl Shape {
 
     fn union<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
         match (&self.inner, &rhs.inner) {
+            (Shapes::Polygon(p), Shapes::Polygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().union(q.as_ref()))
+            }
             (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
                 mpg_to_pyany(py, p.as_ref().union(q.as_ref()))
             }
@@ -770,6 +774,9 @@ impl Shape {
 
     fn difference<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
         match (&self.inner, &rhs.inner) {
+            (Shapes::Polygon(p), Shapes::Polygon(q)) => {
+                mpg_to_pyany(py, p.as_ref().difference(q.as_ref()))
+            }
             (Shapes::MultiPolygon(p), Shapes::Polygon(q)) => {
                 mpg_to_pyany(py, p.as_ref().difference(q.as_ref()))
             }
