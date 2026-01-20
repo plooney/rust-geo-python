@@ -203,6 +203,8 @@ jobs:
           args: --release --out dist
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           rust-toolchain: nightly
+        env:
+          EMCC_SKIP_WASM_OPT: '1'
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -210,6 +212,8 @@ jobs:
           args: --release --out dist -i python3.13t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           rust-toolchain: nightly
+        env:
+          EMCC_SKIP_WASM_OPT: '1'
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
