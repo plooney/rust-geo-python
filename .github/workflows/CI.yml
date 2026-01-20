@@ -17,9 +17,6 @@ on:
 permissions:
   contents: read
 
-env:
-  EMSDK_VERSION: 3.1.56
-
 jobs:
   linux:
     runs-on: ${{ matrix.platform.runner }}
@@ -173,59 +170,6 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: wheels-macos-${{ matrix.platform.target }}
-          path: dist
-
-  emscripten:
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
-          - runner: ubuntu-22.04
-            target: wasm32-unknown-emscripten
-    steps:
-      - name: Install Emscripten (pinned)
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install 3.1.56
-          ./emsdk activate 3.1.56
-          echo "$PWD" >> $GITHUB_PATH
-          echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
-      - uses: actions/checkout@v4
-      - run: pip install pyodide-build
-      - name: Get Emscripten and Python version info
-        shell: bash
-        run: |
-          echo PYTHON_VERSION=$(pyodide config get python_version | cut -d '.' -f 1-2) >> $GITHUB_ENV
-          pip uninstall -y pyodide-build
-      - uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: ${{ env.EMSDK_VERSION }}
-          actions-cache-folder: emsdk-cache
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install pyodide-build
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          rust-toolchain: nightly
-      - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist -i python3.13t
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          rust-toolchain: nightly
-        env:
-          EMCC_SKIP_WASM_OPT: '1'
-      - name: Upload wheels
-        uses: actions/upload-artifact@v5
-        with:
-          name: wasm-wheels
           path: dist
 
   sdist:
