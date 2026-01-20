@@ -37,4 +37,5 @@ rustflags = [
 rustflags = [
     "-C", "link-arg=-sSIDE_MODULE=2",
     "-C", "link-arg=-sWASM_BIGINT",
+    "-C", "target-feature=-bulk-memory",
 ]
