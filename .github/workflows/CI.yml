@@ -183,6 +183,14 @@ jobs:
           - runner: ubuntu-22.04
             target: wasm32-unknown-emscripten
     steps:
+      - name: Install Emscripten (pinned)
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install 3.1.56
+          ./emsdk activate 3.1.56
+          echo "$PWD" >> $GITHUB_PATH
+          echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
       - uses: actions/checkout@v4
       - run: pip install pyodide-build
       - name: Get Emscripten and Python version info
