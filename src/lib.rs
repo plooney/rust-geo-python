@@ -1,3 +1,5 @@
+#[macro_use]
+mod macros;
 mod enums;
 mod functions;
 mod pyfunctions;

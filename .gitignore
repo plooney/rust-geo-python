@@ -1,6 +1,7 @@
 *
 !Cargo.toml
 !src
+!src/*
 !pyproject.toml
 !README.md
 !LICENSE.txt
