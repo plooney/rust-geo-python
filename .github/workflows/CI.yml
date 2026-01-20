@@ -17,6 +17,9 @@ on:
 permissions:
   contents: read
 
+env:
+  EMSDK_VERSION: 3.1.56
+
 jobs:
   linux:
     runs-on: ${{ matrix.platform.runner }}
@@ -185,12 +188,11 @@ jobs:
       - name: Get Emscripten and Python version info
         shell: bash
         run: |
-          echo EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version) >> $GITHUB_ENV
           echo PYTHON_VERSION=$(pyodide config get python_version | cut -d '.' -f 1-2) >> $GITHUB_ENV
           pip uninstall -y pyodide-build
       - uses: mymindstorm/setup-emsdk@v14
         with:
-          version: ${{ env.EMSCRIPTEN_VERSION }}
+          version: ${{ env.EMSDK_VERSION }}
           actions-cache-folder: emsdk-cache
       - uses: actions/setup-python@v5
         with:
