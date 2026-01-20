@@ -1,6 +1,6 @@
 [package]
 name = "rust-geo-python"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["plooney"]
 edition = "2024"
 
@@ -9,14 +9,17 @@ name = "rust_geo_python"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.27.1", features = ["extension-module", "abi3-py37"] }
-ndarray = {version="0.17.1", features = ["rayon"]}
+pyo3 = { version = "0.27.2", features = ["extension-module", "abi3-py37", "generate-import-lib"] }
+ndarray = {version="0.17.2", features = ["rayon"]}
 numpy = "0.27.1"
 geo = { version = "0.32.0" }
 wkt = "0.14.0"
-wkb = "0.9.1"
+wkb = "0.9.2"
 
-[workspace]
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3 
 
 [tool.cibuildwheel.macos.environment]
 MACOSX_DEPLOYMENT_TARGET = "10.12"
@@ -26,6 +29,7 @@ skip = ["*-musllinux_i686"]
 
 [target.x86_64-apple-darwin]
 rustflags = [
-  "-C", "link-arg=-undefined",
-  "-C", "link-arg=dynamic_lookup",
+	"-C", "link-arg=-undefined",
+	"-C", "link-arg=dynamic_lookup",
 ]
+

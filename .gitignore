@@ -1,5 +1,6 @@
-target/
-Cargo.lock
-.idea/
-*.py
+*
 !Cargo.toml
+!src
+!pyproject.toml
+!README.md
+!LICENSE.txt
