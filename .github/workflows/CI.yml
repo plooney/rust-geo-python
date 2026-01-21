@@ -194,7 +194,7 @@ jobs:
     needs: [linux, musllinux, windows, macos, sdist]
     environment:
       # Create this environment in the GitHub repository under Settings -> Environments
-      name: pypi
+      name: release
     permissions:
       # Use to sign the release artifacts
       id-token: write
