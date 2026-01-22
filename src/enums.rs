@@ -7,7 +7,7 @@ use geo::orient::{Direction, Orient};
 use geo::{
     Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
     Intersects, Line, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Rect,
-    Simplify, Triangle, coord, unary_union,
+    Simplify, Triangle, Validation, coord, unary_union,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::{Bound, PyResult, Python};
@@ -435,6 +435,10 @@ impl Shape {
 
     fn intersects(&self, rhs: &Shape) -> bool {
         match_shapes_method!(self, rhs, intersects)
+    }
+
+    fn is_valid(&self) -> bool {
+        match_shape!(self, is_valid)
     }
 
     fn to_wkt(&self) -> String {
