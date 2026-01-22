@@ -6,8 +6,8 @@ use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArray
 use geo::orient::{Direction, Orient};
 use geo::{
     Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
-    Intersects, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Simplify,
-    unary_union,
+    Intersects, Line, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Rect,
+    Simplify, Triangle, coord, unary_union,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::{Bound, PyResult, Python};
@@ -86,11 +86,14 @@ fn polygon_to_array2<'py>(
 #[derive(Clone)]
 pub enum Shapes {
     Point(Arc<Point>),
+    Line(Arc<Line>),
     MultiPoint(Arc<MultiPoint>),
     LineString(Arc<LineString>),
     MultiLineString(Arc<MultiLineString>),
     Polygon(Arc<Polygon>),
     MultiPolygon(Arc<MultiPolygon>),
+    Triangle(Arc<Triangle>),
+    Rect(Arc<Rect>),
 }
 
 #[pyclass(subclass)]
@@ -106,10 +109,16 @@ pub struct RustPoint {
 }
 #[pyclass(extends=Shape)]
 #[derive(Clone)]
+pub struct RustLine {
+    line: Arc<Line>,
+}
+#[pyclass(extends=Shape)]
+#[derive(Clone)]
 pub struct RustMultiPoint {
     multipoint: Arc<MultiPoint>,
 }
 #[pyclass(extends=Shape)]
+#[derive(Clone)]
 pub struct RustLineString {
     linestring: Arc<LineString>,
 }
@@ -119,13 +128,27 @@ pub struct RustPolygon {
     polygon: Arc<Polygon>,
 }
 #[pyclass(extends=Shape)]
+#[derive(Clone)]
 pub struct RustMultiLineString {
     multilinestring: Arc<MultiLineString>,
 }
 
 #[pyclass(extends=Shape)]
+#[derive(Clone)]
 pub struct RustMultiPolygon {
     multipolygon: Arc<MultiPolygon>,
+}
+
+#[pyclass(extends=Shape)]
+#[derive(Clone)]
+pub struct RustTriangle {
+    triangle: Arc<Triangle>,
+}
+
+#[pyclass(extends=Shape)]
+#[derive(Clone)]
+pub struct RustRect {
+    rect: Arc<Rect>,
 }
 
 #[pymethods]
@@ -172,6 +195,77 @@ impl RustMultiPoint {
 
     fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
         let arr = multipoint_to_array(&self.multipoint);
+        let pyarray = PyArray2::from_owned_array(py, arr);
+        Ok(pyarray)
+    }
+}
+
+#[pymethods]
+impl RustLine {
+    #[new]
+    fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> (Self, Shape) {
+        let line = Line::new(coord! { x: x0, y: y0 }, coord! { x: x1, y: y1 });
+        let line_arc = Arc::new(line);
+        (
+            RustLine {
+                line: line_arc.clone(),
+            },
+            Shape {
+                inner: Shapes::Line(line_arc),
+            },
+        )
+    }
+
+    fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let ps = self.line.points();
+        (ps.0.x_y(), ps.1.x_y()).into_bound_py_any(py)
+    }
+}
+
+#[pymethods]
+impl RustTriangle {
+    #[new]
+    fn new(x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> (Self, Shape) {
+        let tri = Triangle::new(
+            coord! { x: x0, y: y0 },
+            coord! { x: x1, y: y1 },
+            coord! { x: x2, y: y2 },
+        );
+        let tri_arc = Arc::new(tri);
+        (
+            RustTriangle {
+                triangle: tri_arc.clone(),
+            },
+            Shape {
+                inner: Shapes::Triangle(tri_arc),
+            },
+        )
+    }
+
+    fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let ps = &self.triangle;
+        (ps.0.x_y(), ps.1.x_y(), ps.2.x_y()).into_bound_py_any(py)
+    }
+}
+
+#[pymethods]
+impl RustRect {
+    #[new]
+    fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> (Self, Shape) {
+        let rect = Rect::new(coord! { x: x0, y: y0 }, coord! { x: x1, y: y1 });
+        let rect_arc = Arc::new(rect);
+        (
+            RustRect {
+                rect: rect_arc.clone(),
+            },
+            Shape {
+                inner: Shapes::Rect(rect_arc),
+            },
+        )
+    }
+
+    fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let arr = linestring_to_array(&self.rect.to_polygon().exterior());
         let pyarray = PyArray2::from_owned_array(py, arr);
         Ok(pyarray)
     }
@@ -355,6 +449,9 @@ impl Shape {
             Shapes::MultiLineString(p) => p.buffer(radius),
             Shapes::MultiPolygon(p) => p.buffer(radius),
             Shapes::Polygon(p) => p.buffer(radius),
+            Shapes::Line(p) => p.buffer(radius),
+            Shapes::Triangle(p) => p.buffer(radius),
+            Shapes::Rect(p) => p.buffer(radius),
         };
         let multipolygon_arc = Arc::new(polygons);
         let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
@@ -426,6 +523,46 @@ impl Shape {
         match &self.inner {
             Shapes::Point(_) => Ok(py.None()),
             Shapes::MultiPoint(_) => Ok(py.None()),
+            Shapes::Line(p) => {
+                let ps = p.points();
+                let multipoint = MultiPoint::new(vec![ps.0, ps.1]);
+                let multipoint_arc = Arc::new(multipoint);
+                let initializer: PyClassInitializer<RustMultiPoint> = PyClassInitializer::from((
+                    RustMultiPoint {
+                        multipoint: multipoint_arc.clone(),
+                    },
+                    Shape {
+                        inner: Shapes::MultiPoint(multipoint_arc),
+                    },
+                ));
+                Ok(Py::new(py, initializer)?.into_any())
+            }
+            Shapes::Triangle(p) => {
+                let ls = p.to_polygon().exterior().clone();
+                let linestring_arc = Arc::new(ls);
+                let initializer: PyClassInitializer<RustLineString> = PyClassInitializer::from((
+                    RustLineString {
+                        linestring: linestring_arc.clone(),
+                    },
+                    Shape {
+                        inner: Shapes::LineString(linestring_arc),
+                    },
+                ));
+                Ok(Py::new(py, initializer)?.into_any())
+            }
+            Shapes::Rect(p) => {
+                let ls = p.to_polygon().exterior().clone();
+                let linestring_arc = Arc::new(ls);
+                let initializer: PyClassInitializer<RustLineString> = PyClassInitializer::from((
+                    RustLineString {
+                        linestring: linestring_arc.clone(),
+                    },
+                    Shape {
+                        inner: Shapes::LineString(linestring_arc),
+                    },
+                ));
+                Ok(Py::new(py, initializer)?.into_any())
+            }
             Shapes::LineString(p) => {
                 let multipoint = p.points().collect::<MultiPoint>();
                 let multipoint_arc = Arc::new(multipoint);

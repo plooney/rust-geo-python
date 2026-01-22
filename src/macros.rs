@@ -39,6 +39,60 @@ macro_rules! match_shapes_method {
             (Shapes::MultiLineString(p), Shapes::MultiPoint(q)) => p.as_ref().$method(q.as_ref()),
             (Shapes::Polygon(p), Shapes::MultiPoint(q)) => p.as_ref().$method(q.as_ref()),
             (Shapes::MultiPolygon(p), Shapes::MultiPoint(q)) => p.as_ref().$method(q.as_ref()),
+
+            // Line arms
+            (Shapes::Line(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::Point(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::MultiPoint(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::LineString(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::MultiLineString(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::Polygon(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::MultiPolygon(q)) => p.as_ref().$method(q.as_ref()),
+
+            (Shapes::Point(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::LineString(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Polygon(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+
+            // Triangle arms
+            (Shapes::Triangle(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Triangle(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Triangle(p), Shapes::Point(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Triangle(p), Shapes::MultiPoint(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Triangle(p), Shapes::LineString(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Triangle(p), Shapes::MultiLineString(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Triangle(p), Shapes::Polygon(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Triangle(p), Shapes::MultiPolygon(q)) => p.as_ref().$method(q.as_ref()),
+
+            (Shapes::Line(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Point(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::LineString(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Polygon(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+
+            // Rect arms
+            (Shapes::Rect(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::Point(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::MultiPoint(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::LineString(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::MultiLineString(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::Polygon(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::MultiPolygon(q)) => p.as_ref().$method(q.as_ref()),
+
+            (Shapes::Triangle(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Point(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::LineString(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Polygon(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
         }
     };
 }
@@ -110,6 +164,64 @@ macro_rules! match_shapes_algo {
             (Shapes::MultiPolygon(p), Shapes::MultiPoint(q)) => {
                 $algo.$method(p.as_ref(), q.as_ref())
             }
+
+            // Line arms
+            (Shapes::Line(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Line(p), Shapes::Point(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Line(p), Shapes::MultiPoint(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Line(p), Shapes::LineString(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Line(p), Shapes::MultiLineString(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Line(p), Shapes::Polygon(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Line(p), Shapes::MultiPolygon(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+
+            (Shapes::Point(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::LineString(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Polygon(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+
+            // Triangle arms
+            (Shapes::Triangle(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Triangle(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Triangle(p), Shapes::Point(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Triangle(p), Shapes::MultiPoint(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Triangle(p), Shapes::LineString(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Triangle(p), Shapes::MultiLineString(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::Triangle(p), Shapes::Polygon(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Triangle(p), Shapes::MultiPolygon(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+
+            (Shapes::Line(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Point(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::LineString(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Triangle(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::Polygon(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+
+            // Rect arms
+            (Shapes::Rect(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::Triangle(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::Line(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::Point(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::MultiPoint(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::LineString(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::MultiLineString(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::Polygon(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Rect(p), Shapes::MultiPolygon(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+
+            (Shapes::Triangle(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Line(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Point(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiPoint(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::LineString(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiLineString(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::Polygon(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
         }
     };
 }
@@ -123,6 +235,9 @@ macro_rules! match_shape {
             Shapes::MultiLineString(p) => p.$method(),
             Shapes::MultiPolygon(p) => p.$method(),
             Shapes::Polygon(p) => p.$method(),
+            Shapes::Line(p) => p.$method(),
+            Shapes::Triangle(p) => p.$method(),
+            Shapes::Rect(p) => p.$method(),
         }
     };
 }
