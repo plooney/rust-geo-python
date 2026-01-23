@@ -10,7 +10,7 @@ mod rust_geo_python {
     #[pymodule_export]
     use crate::enums::{
         RustLineString, RustMultiPoint, RustMultiPolygon, RustPoint, RustPointCollection,
-        RustPolygon, Shape, point_in_polygon, union,
+        RustPolygon, RustShape, point_in_polygon, union,
     };
 
     #[pymodule_export]

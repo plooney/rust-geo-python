@@ -5,9 +5,9 @@ use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArray
 
 use geo::orient::{Direction, Orient};
 use geo::{
-    Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, HausdorffDistance,
-    Intersects, Line, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Rect,
-    Simplify, Triangle, Validation, coord, unary_union,
+    Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, Geometry,
+    HausdorffDistance, Intersects, Line, LineString, MultiLineString, MultiPoint, MultiPolygon,
+    Point, Polygon, Rect, Simplify, Triangle, Validation, coord, unary_union,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::{Bound, PyResult, Python};
@@ -98,54 +98,54 @@ pub enum Shapes {
 
 #[pyclass(subclass)]
 #[derive(Clone)]
-pub struct Shape {
+pub struct RustShape {
     inner: Shapes,
 }
 
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustPoint {
     point: Arc<Point>,
 }
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustLine {
     line: Arc<Line>,
 }
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustMultiPoint {
     multipoint: Arc<MultiPoint>,
 }
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustLineString {
     linestring: Arc<LineString>,
 }
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustPolygon {
     polygon: Arc<Polygon>,
 }
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustMultiLineString {
     multilinestring: Arc<MultiLineString>,
 }
 
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustMultiPolygon {
     multipolygon: Arc<MultiPolygon>,
 }
 
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustTriangle {
     triangle: Arc<Triangle>,
 }
 
-#[pyclass(extends=Shape)]
+#[pyclass(extends=RustShape)]
 #[derive(Clone)]
 pub struct RustRect {
     rect: Arc<Rect>,
@@ -154,14 +154,14 @@ pub struct RustRect {
 #[pymethods]
 impl RustLineString {
     #[new]
-    fn new(x: PyReadonlyArray2<f64>) -> (Self, Shape) {
+    fn new(x: PyReadonlyArray2<f64>) -> (Self, RustShape) {
         let ls = array2_to_linestring(&x);
         let ls_arc = Arc::new(ls);
         (
             RustLineString {
                 linestring: ls_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::LineString(ls_arc),
             },
         )
@@ -177,7 +177,7 @@ impl RustLineString {
 #[pymethods]
 impl RustMultiPoint {
     #[new]
-    fn new(x: PyReadonlyArray2<f64>) -> (Self, Shape) {
+    fn new(x: PyReadonlyArray2<f64>) -> (Self, RustShape) {
         let ls = array2_to_linestring(&x);
 
         let multipoint = ls.points().collect::<MultiPoint>();
@@ -187,7 +187,7 @@ impl RustMultiPoint {
             RustMultiPoint {
                 multipoint: multipoint_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::MultiPoint(multipoint_arc),
             },
         )
@@ -203,14 +203,14 @@ impl RustMultiPoint {
 #[pymethods]
 impl RustLine {
     #[new]
-    fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> (Self, Shape) {
+    fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> (Self, RustShape) {
         let line = Line::new(coord! { x: x0, y: y0 }, coord! { x: x1, y: y1 });
         let line_arc = Arc::new(line);
         (
             RustLine {
                 line: line_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::Line(line_arc),
             },
         )
@@ -225,7 +225,7 @@ impl RustLine {
 #[pymethods]
 impl RustTriangle {
     #[new]
-    fn new(x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> (Self, Shape) {
+    fn new(x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> (Self, RustShape) {
         let tri = Triangle::new(
             coord! { x: x0, y: y0 },
             coord! { x: x1, y: y1 },
@@ -236,7 +236,7 @@ impl RustTriangle {
             RustTriangle {
                 triangle: tri_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::Triangle(tri_arc),
             },
         )
@@ -251,14 +251,14 @@ impl RustTriangle {
 #[pymethods]
 impl RustRect {
     #[new]
-    fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> (Self, Shape) {
+    fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> (Self, RustShape) {
         let rect = Rect::new(coord! { x: x0, y: y0 }, coord! { x: x1, y: y1 });
         let rect_arc = Arc::new(rect);
         (
             RustRect {
                 rect: rect_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::Rect(rect_arc),
             },
         )
@@ -274,14 +274,14 @@ impl RustRect {
 #[pymethods]
 impl RustPoint {
     #[new]
-    fn new(x: f64, y: f64) -> (Self, Shape) {
+    fn new(x: f64, y: f64) -> (Self, RustShape) {
         let point = Point::new(x, y);
         let point_arc = Arc::new(point);
         (
             RustPoint {
                 point: point_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::Point(point_arc),
             },
         )
@@ -296,14 +296,14 @@ impl RustPoint {
 #[pymethods]
 impl RustPolygon {
     #[new]
-    fn new(x: PyReadonlyArray2<f64>, ys: Vec<PyReadonlyArray2<f64>>) -> (Self, Shape) {
+    fn new(x: PyReadonlyArray2<f64>, ys: Vec<PyReadonlyArray2<f64>>) -> (Self, RustShape) {
         let polygon = array2_to_polygon(&x, &ys).orient(Direction::Default);
         let polygon_arc = Arc::new(polygon);
         (
             RustPolygon {
                 polygon: polygon_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::Polygon(polygon_arc),
             },
         )
@@ -323,7 +323,7 @@ impl RustPolygon {
             RustPolygon {
                 polygon: polygon_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::Polygon(polygon_arc),
             },
         ));
@@ -338,7 +338,7 @@ impl RustPolygon {
 #[pymethods]
 impl RustMultiLineString {
     #[new]
-    fn new(ys: Vec<PyReadonlyArray2<f64>>) -> (Self, Shape) {
+    fn new(ys: Vec<PyReadonlyArray2<f64>>) -> (Self, RustShape) {
         let lss = ys
             .iter()
             .map(|x| array2_to_linestring(x))
@@ -348,7 +348,7 @@ impl RustMultiLineString {
             RustMultiLineString {
                 multilinestring: lss_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::MultiLineString(lss_arc),
             },
         )
@@ -367,7 +367,9 @@ impl RustMultiLineString {
 #[pymethods]
 impl RustMultiPolygon {
     #[new]
-    fn new(pyarrays: Vec<(PyReadonlyArray2<f64>, Vec<PyReadonlyArray2<f64>>)>) -> (Self, Shape) {
+    fn new(
+        pyarrays: Vec<(PyReadonlyArray2<f64>, Vec<PyReadonlyArray2<f64>>)>,
+    ) -> (Self, RustShape) {
         let polygons = pyarrays
             .iter()
             .map(|(x, ys)| array2_to_polygon(&x, &ys).orient(Direction::Default))
@@ -378,7 +380,7 @@ impl RustMultiPolygon {
             RustMultiPolygon {
                 multipolygon: multipolygon_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::MultiPolygon(multipolygon_arc),
             },
         )
@@ -403,7 +405,7 @@ impl RustMultiPolygon {
             RustMultiPolygon {
                 multipolygon: multipolygon_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::MultiPolygon(multipolygon_arc),
             },
         ));
@@ -416,24 +418,24 @@ impl RustMultiPolygon {
 }
 
 #[pymethods]
-impl Shape {
-    fn distance(&self, rhs: &Shape) -> f64 {
+impl RustShape {
+    fn distance(&self, rhs: &RustShape) -> f64 {
         match_shapes_algo!(self, rhs, Euclidean, distance)
     }
 
-    fn hausdorff_distance(&self, rhs: &Shape) -> f64 {
+    fn hausdorff_distance(&self, rhs: &RustShape) -> f64 {
         match_shapes_method!(self, rhs, hausdorff_distance)
     }
 
-    fn contains(&self, rhs: &Shape) -> bool {
+    fn contains(&self, rhs: &RustShape) -> bool {
         match_shapes_method!(self, rhs, contains)
     }
 
-    fn contains_properly(&self, rhs: &Shape) -> bool {
+    fn contains_properly(&self, rhs: &RustShape) -> bool {
         match_shapes_method!(self, rhs, contains_properly)
     }
 
-    fn intersects(&self, rhs: &Shape) -> bool {
+    fn intersects(&self, rhs: &RustShape) -> bool {
         match_shapes_method!(self, rhs, intersects)
     }
 
@@ -462,14 +464,14 @@ impl Shape {
             RustMultiPolygon {
                 multipolygon: multipolygon_arc.clone(),
             },
-            Shape {
+            RustShape {
                 inner: Shapes::MultiPolygon(multipolygon_arc),
             },
         ));
         Ok(Py::new(py, initializer)?.into_any())
     }
 
-    fn intersection<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
+    fn intersection<'py>(&self, py: Python<'py>, rhs: &RustShape) -> PyResult<Py<PyAny>> {
         match (&self.inner, &rhs.inner) {
             (Shapes::Polygon(p), Shapes::Polygon(q)) => {
                 mpg_to_pyany(py, p.as_ref().intersection(q.as_ref()))
@@ -487,7 +489,7 @@ impl Shape {
         }
     }
 
-    fn union<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
+    fn union<'py>(&self, py: Python<'py>, rhs: &RustShape) -> PyResult<Py<PyAny>> {
         match (&self.inner, &rhs.inner) {
             (Shapes::Polygon(p), Shapes::Polygon(q)) => {
                 mpg_to_pyany(py, p.as_ref().union(q.as_ref()))
@@ -505,7 +507,7 @@ impl Shape {
         }
     }
 
-    fn difference<'py>(&self, py: Python<'py>, rhs: &Shape) -> PyResult<Py<PyAny>> {
+    fn difference<'py>(&self, py: Python<'py>, rhs: &RustShape) -> PyResult<Py<PyAny>> {
         match (&self.inner, &rhs.inner) {
             (Shapes::Polygon(p), Shapes::Polygon(q)) => {
                 mpg_to_pyany(py, p.as_ref().difference(q.as_ref()))
@@ -535,7 +537,7 @@ impl Shape {
                     RustMultiPoint {
                         multipoint: multipoint_arc.clone(),
                     },
-                    Shape {
+                    RustShape {
                         inner: Shapes::MultiPoint(multipoint_arc),
                     },
                 ));
@@ -548,7 +550,7 @@ impl Shape {
                     RustLineString {
                         linestring: linestring_arc.clone(),
                     },
-                    Shape {
+                    RustShape {
                         inner: Shapes::LineString(linestring_arc),
                     },
                 ));
@@ -561,7 +563,7 @@ impl Shape {
                     RustLineString {
                         linestring: linestring_arc.clone(),
                     },
-                    Shape {
+                    RustShape {
                         inner: Shapes::LineString(linestring_arc),
                     },
                 ));
@@ -574,7 +576,7 @@ impl Shape {
                     RustMultiPoint {
                         multipoint: multipoint_arc.clone(),
                     },
-                    Shape {
+                    RustShape {
                         inner: Shapes::MultiPoint(multipoint_arc),
                     },
                 ));
@@ -593,7 +595,7 @@ impl Shape {
                     RustMultiPoint {
                         multipoint: multipoint_arc.clone(),
                     },
-                    Shape {
+                    RustShape {
                         inner: Shapes::MultiPoint(multipoint_arc),
                     },
                 ));
@@ -614,7 +616,7 @@ impl Shape {
                         RustMultiLineString {
                             multilinestring: multilinestring_arc.clone(),
                         },
-                        Shape {
+                        RustShape {
                             inner: Shapes::MultiLineString(multilinestring_arc),
                         },
                     ));
@@ -634,7 +636,7 @@ impl Shape {
                         RustMultiLineString {
                             multilinestring: multilinestring_arc.clone(),
                         },
-                        Shape {
+                        RustShape {
                             inner: Shapes::MultiLineString(multilinestring_arc),
                         },
                     ));
@@ -658,7 +660,7 @@ pub fn intersection<'py>(
         RustMultiPolygon {
             multipolygon: multipolygon_arc.clone(),
         },
-        Shape {
+        RustShape {
             inner: Shapes::MultiPolygon(multipolygon_arc),
         },
     ));
@@ -671,7 +673,7 @@ pub fn mpg_to_pyany<'py>(py: Python<'py>, mpg: MultiPolygon) -> PyResult<Py<PyAn
         RustMultiPolygon {
             multipolygon: multipolygon_arc.clone(),
         },
-        Shape {
+        RustShape {
             inner: Shapes::MultiPolygon(multipolygon_arc),
         },
     ));
@@ -690,7 +692,7 @@ pub fn union<'py>(py: Python<'py>, rust_polygons: Vec<RustPolygon>) -> PyResult<
         RustMultiPolygon {
             multipolygon: multipolygon_arc.clone(),
         },
-        Shape {
+        RustShape {
             inner: Shapes::MultiPolygon(multipolygon_arc),
         },
     ));
@@ -707,8 +709,8 @@ pub fn point_in_polygon<'py>(rust_point: RustPoint, rust_polygon: RustPolygon) -
 
 #[pyclass(subclass)]
 #[derive(Clone)]
-pub struct RustPointCollection {
-    points: Vec<Point>,
+pub struct RustGeomVecCollection {
+    geoms: Vec<Geometry>,
 }
 
 fn array2_to_points<'py>(x: &PyReadonlyArray2<'py, f64>) -> Vec<Point<f64>> {
@@ -735,139 +737,37 @@ fn points_to_array<'py>(points: &Vec<Point<f64>>) -> Array2<f64> {
 }
 
 #[pymethods]
-impl RustPointCollection {
+impl RustGeomVecCollection {
     #[new]
-    fn new(x: PyReadonlyArray2<f64>) -> Self {
-        let points = array2_to_points(&x);
-        RustPointCollection { points: points }
-    }
-
-    fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        let arr = points_to_array(&self.points);
-        let pyarray = PyArray2::from_owned_array(py, arr);
-        Ok(pyarray)
-    }
-
-    fn distance_ls<'py>(
-        &self,
-        py: Python<'py>,
-        ls: &RustLineString,
-    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
-        let arr = self
-            .points
+    fn new(shapes: Vec<RustShape>) -> Self {
+        let geoms = shapes
             .iter()
-            .map(|p| Euclidean.distance(p, ls.linestring.as_ref()))
-            .collect::<Array1<f64>>();
-        let pyarray = PyArray1::from_owned_array(py, arr);
-        Ok(pyarray)
+            .map(|x| match_shape_geom!(x))
+            .collect::<Vec<Geometry>>();
+        RustGeomVecCollection { geoms: geoms }
     }
 
-    fn distance_points<'py>(
+    fn distance<'py>(
         &self,
         py: Python<'py>,
-        other: &RustPointCollection,
-    ) -> Bound<'py, PyArray2<f64>> {
-        let n_points = self.points.len();
-        let n_points_other = other.points.len();
-        let index = (0..n_points)
-            //.into_par_iter()
-            .flat_map(|i| (0..n_points_other).map(move |j| (i, j)));
+        other: RustGeomVecCollection,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let n_geoms = self.geoms.len();
+        let n_geoms_other = other.geoms.len();
+        let index = (0..n_geoms).flat_map(|i| (0..n_geoms_other).map(move |j| (i, j)));
 
-        let shape = (n_points, n_points_other);
+        let shape = (n_geoms, n_geoms_other);
         let mut arr = Array2::zeros(shape);
-        //let pyarray2 = PyArray2::<f64>::zeros(py, shape, false);
-        //
 
         index.for_each(|(i, j)| {
-            let a = self.points.get(i);
-            let b = other.points.get(j);
+            let a = self.geoms.get(i);
+            let b = other.geoms.get(j);
             if let (Some(p), Some(q)) = (a, b) {
                 let d = Euclidean.distance(p, q);
                 arr[[i, j]] = d;
             }
         });
 
-        arr.to_pyarray(py)
+        Ok(arr.to_pyarray(py))
     }
-
-    //fn distance_points<'py>(
-    //    &self,
-    //    py: Python<'py>,
-    //    other: &RustPointCollection,
-    //) -> Bound<'py, PyArray2<f64>> {
-    //    let n = self.points.len();
-    //    let m = other.points.len();
-
-    //    let mut ds = Vec::with_capacity(n * m);
-
-    //    ds.extend(self.points.iter().flat_map(|p| {
-    //        other.points.iter().map(move |q| {
-    //            let d = (((p.x() - q.x()) * (p.x() - q.x())) + ((p.y() - q.y()) * (p.y() - q.y())))
-    //                .sqrt();
-    //            d
-    //        })
-    //    }));
-
-    //    let arr = Array2::from_shape_vec((n, m), ds).unwrap();
-    //    arr.into_pyarray(py)
-    //}
 }
-
-//#[pyclass(subclass)]
-//#[derive(Clone)]
-//pub struct RustLineStringCollection {
-//    lss: Vec<LineString>,
-//}
-//
-//#[pymethods]
-//impl RustLineStringCollection {
-//    #[new]
-//    fn new(x: Vec<PyReadonlyArray2<f64>>) -> Self {
-//        let lss = vec_array2_to_lss(&x);
-//        RustLineStringCollection { lss: lss }
-//    }
-//
-//    fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-//        let vec_arr = linestrings_to_vec_array(&self.lss);
-//        let pyarray = PyArray2::from_owned_array(py, arr);
-//        Ok(pyarray)
-//    }
-//
-//    fn distance_ls<'py>(
-//        &self,
-//        py: Python<'py>,
-//        ls_other: &RustLineString,
-//    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
-//        let arr = self
-//            .lss
-//            .iter()
-//            .map(|ls| Euclidean.distance(ls, ls_other.linestring.as_ref()))
-//            .collect::<Array1<f64>>();
-//        //    into_iter()
-//
-//        let pyarray = PyArray1::from_owned_array(py, arr);
-//        Ok(pyarray)
-//    }
-//
-//    fn distance_points<'py>(
-//        &self,
-//        py: Python<'py>,
-//        other: &RustPointCollection,
-//    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-//        let n_points = self.points.len();
-//        let n_points_other = other.points.len();
-//        let mut arr = Array2::zeros((n_points, n_points_other));
-//        let mut i = 0;
-//        self.points.iter().for_each(|p| {
-//            let mut j = 0;
-//            other.points.iter().for_each(|q| {
-//                arr[[i, j]] = Euclidean.distance(p, q);
-//                j += 1;
-//            });
-//            i += 1;
-//        });
-//
-//        let pyarray = PyArray2::from_owned_array(py, arr);
-//        Ok(pyarray)
-//    }
-//}

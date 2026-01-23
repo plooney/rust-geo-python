@@ -241,3 +241,19 @@ macro_rules! match_shape {
         }
     };
 }
+
+macro_rules! match_shape_geom {
+    ($self:ident) => {
+        match &$self.inner {
+            Shapes::Point(p) => Geometry::Point(p.as_ref().to_owned()),
+            Shapes::MultiPoint(p) => Geometry::MultiPoint(p.as_ref().to_owned()),
+            Shapes::LineString(p) => Geometry::LineString(p.as_ref().to_owned()),
+            Shapes::MultiLineString(p) => Geometry::MultiLineString(p.as_ref().to_owned()),
+            Shapes::MultiPolygon(p) => Geometry::MultiPolygon(p.as_ref().to_owned()),
+            Shapes::Polygon(p) => Geometry::Polygon(p.as_ref().to_owned()),
+            Shapes::Line(p) => Geometry::Line(p.as_ref().to_owned()),
+            Shapes::Triangle(p) => Geometry::Triangle(p.as_ref().to_owned()),
+            Shapes::Rect(p) => Geometry::Rect(p.as_ref().to_owned()),
+        }
+    };
+}
