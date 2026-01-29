@@ -160,6 +160,43 @@ pub struct RustIntersectionMatrix {
 }
 
 #[pymethods]
+impl RustIntersectionMatrix {
+    fn is_overlaps(&self) -> bool {
+        self.intersection_matrix.is_overlaps()
+    }
+    fn is_intersects(&self) -> bool {
+        self.intersection_matrix.is_intersects()
+    }
+    fn is_contains(&self) -> bool {
+        self.intersection_matrix.is_contains()
+    }
+    fn is_within(&self) -> bool {
+        self.intersection_matrix.is_within()
+    }
+    fn is_equal_topo(&self) -> bool {
+        self.intersection_matrix.is_equal_topo()
+    }
+    fn is_contains_properly(&self) -> bool {
+        self.intersection_matrix.is_contains_properly()
+    }
+    fn is_crosses(&self) -> bool {
+        self.intersection_matrix.is_crosses()
+    }
+    fn is_coveredby(&self) -> bool {
+        self.intersection_matrix.is_coveredby()
+    }
+    fn is_covers(&self) -> bool {
+        self.intersection_matrix.is_covers()
+    }
+    fn is_touches(&self) -> bool {
+        self.intersection_matrix.is_touches()
+    }
+    fn is_disjoint(&self) -> bool {
+        self.intersection_matrix.is_disjoint()
+    }
+}
+
+#[pymethods]
 impl RustLineString {
     #[new]
     fn new(x: PyReadonlyArray2<f64>) -> (Self, RustShape) {
