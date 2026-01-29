@@ -3,6 +3,8 @@ use numpy::ToPyArray;
 use numpy::ndarray::{Array1, Array2, Axis};
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods};
 
+use geo::algorithm::Relate;
+use geo::algorithm::relate::IntersectionMatrix;
 use geo::orient::{Direction, Orient};
 use geo::{
     Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, Geometry,
@@ -149,6 +151,12 @@ pub struct RustTriangle {
 #[derive(Clone)]
 pub struct RustRect {
     rect: Arc<Rect>,
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct RustIntersectionMatrix {
+    intersection_matrix: IntersectionMatrix,
 }
 
 #[pymethods]
@@ -437,6 +445,20 @@ impl RustShape {
 
     fn intersects(&self, rhs: &RustShape) -> bool {
         match_shapes_method!(self, rhs, intersects)
+    }
+
+    fn relate<'py>(
+        &self,
+        rhs: &RustShape,
+        py: Python<'py>,
+    ) -> PyResult<Py<RustIntersectionMatrix>> {
+        let intersection_matrix = match_shapes_method!(self, rhs, relate);
+        Py::new(
+            py,
+            RustIntersectionMatrix {
+                intersection_matrix: intersection_matrix,
+            },
+        )
     }
 
     fn is_valid(&self) -> bool {
