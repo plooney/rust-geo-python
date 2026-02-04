@@ -229,8 +229,8 @@ macro_rules! match_shapes_algo {
 macro_rules! match_shape {
     ($self:ident, $method:ident) => {
         match &$self.inner {
-            Shapes::Point(p) => p.as_ref().$method(),
-            Shapes::MultiPoint(p) => p.as_ref().$method(),
+            Shapes::Point(p) => p.$method(),
+            Shapes::MultiPoint(p) => p.$method(),
             Shapes::LineString(p) => p.$method(),
             Shapes::MultiLineString(p) => p.$method(),
             Shapes::MultiPolygon(p) => p.$method(),

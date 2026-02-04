@@ -1,15 +1,15 @@
-use ndarray::parallel::prelude::ParallelIterator;
 use numpy::ToPyArray;
-use numpy::ndarray::{Array1, Array2, Axis};
-use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods};
+use numpy::ndarray::{Array2, Axis};
+use numpy::{PyArray2, PyReadonlyArray2, PyUntypedArrayMethods};
 
+use crate::tiling::{intersect_tile_using_buffered_adapter_mpg, unary_union_with_adapter};
 use geo::algorithm::Relate;
 use geo::algorithm::relate::IntersectionMatrix;
 use geo::orient::{Direction, Orient};
 use geo::{
-    Area, BooleanOps, Buffer, Contains, ContainsProperly, Distance, Euclidean, Geometry,
-    HausdorffDistance, Intersects, Line, LineString, MultiLineString, MultiPoint, MultiPolygon,
-    Point, Polygon, Rect, Simplify, Triangle, Validation, coord, unary_union,
+    Area, BooleanOps, BoundingRect, Buffer, Contains, ContainsProperly, Distance, Euclidean,
+    Geometry, HausdorffDistance, Intersects, Line, LineString, MultiLineString, MultiPoint,
+    MultiPolygon, Point, Polygon, Rect, Simplify, Triangle, Validation, coord, unary_union,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::{Bound, PyResult, Python};
@@ -472,6 +472,23 @@ impl RustShape {
         match_shapes_method!(self, rhs, hausdorff_distance)
     }
 
+    fn bounding_rect<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
+        let rect_option: Option<Rect> = match_shape!(self, bounding_rect).into();
+        if let Some(rect) = rect_option {
+            let rect_arc = Arc::new(rect);
+            let initializer: PyClassInitializer<RustRect> = PyClassInitializer::from((
+                RustRect {
+                    rect: rect_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::Rect(rect_arc),
+                },
+            ));
+            return Ok(Py::new(py, initializer)?.into_any());
+        };
+        Ok(py.None())
+    }
+
     fn contains(&self, rhs: &RustShape) -> bool {
         match_shapes_method!(self, rhs, contains)
     }
@@ -756,6 +773,42 @@ pub fn union<'py>(py: Python<'py>, rust_polygons: Vec<RustPolygon>) -> PyResult<
         },
     ));
     Ok(Py::new(py, initializer)?.into_any())
+}
+
+#[pyfunction]
+pub fn union_with_adapter<'py>(
+    py: Python<'py>,
+    rust_polygons: Vec<RustPolygon>,
+    rust_rect: RustRect,
+) -> PyResult<Py<PyAny>> {
+    let polygons = rust_polygons
+        .iter()
+        .map(|x| x.polygon.as_ref())
+        .collect::<Vec<&Polygon>>();
+    let union = unary_union_with_adapter(polygons, rust_rect.rect.as_ref());
+    let multipolygon_arc = Arc::new(union);
+    let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
+        RustMultiPolygon {
+            multipolygon: multipolygon_arc.clone(),
+        },
+        RustShape {
+            inner: Shapes::MultiPolygon(multipolygon_arc),
+        },
+    ));
+    Ok(Py::new(py, initializer)?.into_any())
+}
+
+#[pyfunction(name = "intersect_tile")]
+pub fn intersect_tile<'py>(
+    py: Python<'py>,
+    polygon: RustMultiPolygon,
+    tile_polygon: RustPolygon,
+) -> PyResult<Py<PyAny>> {
+    let mpg = intersect_tile_using_buffered_adapter_mpg(
+        polygon.multipolygon.as_ref(),
+        tile_polygon.polygon.as_ref(),
+    );
+    mpg_to_pyany(py, mpg)
 }
 
 #[pyfunction]

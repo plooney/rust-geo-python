@@ -3,6 +3,7 @@ mod macros;
 mod enums;
 mod functions;
 mod pyfunctions;
+mod tiling;
 
 #[pyo3::pymodule]
 mod rust_geo_python {
@@ -10,7 +11,7 @@ mod rust_geo_python {
     #[pymodule_export]
     use crate::enums::{
         RustGeomVecCollection, RustLineString, RustMultiPoint, RustMultiPolygon, RustPoint,
-        RustPolygon, RustShape, point_in_polygon, union,
+        RustPolygon, RustShape, intersect_tile, point_in_polygon, union, union_with_adapter,
     };
 
     #[pymodule_export]
