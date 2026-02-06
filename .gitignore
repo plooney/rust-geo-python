@@ -1,5 +1,7 @@
 *
 !Cargo.toml
+!tests
+!tests/*
 !src
 !src/*
 !src/core/*

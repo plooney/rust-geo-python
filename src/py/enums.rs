@@ -16,7 +16,7 @@ use geo::{
 use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
 use pyo3::{Bound, PyResult, Python};
 use pyo3::{IntoPyObjectExt, PyClassInitializer, prelude::*};
-use pyo3::types::PyList;
+use pyo3::types::{PyIterator, PyList};
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -538,7 +538,8 @@ impl RustGeometryCollection {
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
         let items = self.geometries(py)?;
         let list = PyList::new(py, items)?;
-        Ok(list.into())
+        let iter = PyIterator::from_object(list.as_any())?;
+        Ok(iter.into())
     }
 }
 
@@ -986,6 +987,7 @@ impl RustShape {
     }
 }
 
+#[allow(dead_code)]
 #[pyfunction(name = "intersection")]
 pub fn intersection<'py>(
     py: Python<'py>,
@@ -1091,6 +1093,7 @@ pub struct RustGeomVecCollection {
     geoms: Vec<Geometry>,
 }
 
+#[allow(dead_code)]
 fn array2_to_points<'py>(x: &PyReadonlyArray2<'py, f64>) -> Vec<Point<f64>> {
     assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
     let points = x
@@ -1101,6 +1104,7 @@ fn array2_to_points<'py>(x: &PyReadonlyArray2<'py, f64>) -> Vec<Point<f64>> {
     points
 }
 
+#[allow(dead_code)]
 fn points_to_array<'py>(points: &Vec<Point<f64>>) -> Array2<f64> {
     let n_points = points.len();
     let mut arr = Array2::zeros((n_points, 2));

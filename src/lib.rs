@@ -9,9 +9,10 @@ mod rust_geo_python {
 
     #[pymodule_export]
     use crate::py::enums::{
-        RustGeomVecCollection, RustGeometryCollection, RustLine, RustLineString, RustMultiPoint,
-        RustMultiPolygon, RustPoint, RustPolygon, RustRect, RustShape, RustTriangle, from_wkt,
-        intersect_tile, point_in_polygon, union, union_with_adapter,
+        RustGeomVecCollection, RustGeometryCollection, RustLine, RustLineString,
+        RustMultiLineString, RustMultiPoint, RustMultiPolygon, RustPoint, RustPolygon, RustRect,
+        RustShape, RustTriangle, from_wkt, intersect_tile, point_in_polygon, union,
+        union_with_adapter,
     };
 
     #[pymodule_export]

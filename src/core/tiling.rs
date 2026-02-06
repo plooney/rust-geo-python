@@ -1,6 +1,5 @@
 use convert::*;
 use geo::BooleanOps;
-use geo::BoundingRect;
 use geo::GeoFloat;
 use geo::MultiPolygon;
 use geo::Polygon;
@@ -50,6 +49,7 @@ pub(crate) mod convert {
         LineString(coords)
     }
 
+    #[allow(dead_code)]
     pub fn multi_line_string_from_paths<T: BoolOpsNum>(
         paths: Vec<Vec<BoolOpsCoord<T>>>,
     ) -> MultiLineString<T> {
@@ -85,6 +85,7 @@ pub(crate) mod convert {
         coords.iter().copied().map(BoolOpsCoord).collect()
     }
 
+    #[allow(dead_code)]
     pub fn line_string_to_shape_path<T: BoolOpsNum>(
         line_string: &LineString<T>,
     ) -> Vec<BoolOpsCoord<T>> {
