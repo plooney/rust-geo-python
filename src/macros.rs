@@ -93,6 +93,45 @@ macro_rules! match_shapes_method {
             (Shapes::MultiLineString(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
             (Shapes::Polygon(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
             (Shapes::MultiPolygon(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+
+            (Shapes::GeometryCollection(p), Shapes::Point(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::GeometryCollection(p), Shapes::Line(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::GeometryCollection(p), Shapes::LineString(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::MultiPoint(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::MultiLineString(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::Polygon(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::GeometryCollection(p), Shapes::MultiPolygon(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::Triangle(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::GeometryCollection(p), Shapes::Rect(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::GeometryCollection(p), Shapes::GeometryCollection(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+
+            (Shapes::Point(p), Shapes::GeometryCollection(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Line(p), Shapes::GeometryCollection(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::LineString(p), Shapes::GeometryCollection(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::MultiPoint(p), Shapes::GeometryCollection(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::MultiLineString(p), Shapes::GeometryCollection(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::Polygon(p), Shapes::GeometryCollection(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::MultiPolygon(p), Shapes::GeometryCollection(q)) => {
+                p.as_ref().$method(q.as_ref())
+            }
+            (Shapes::Triangle(p), Shapes::GeometryCollection(q)) => p.as_ref().$method(q.as_ref()),
+            (Shapes::Rect(p), Shapes::GeometryCollection(q)) => p.as_ref().$method(q.as_ref()),
         }
     };
 }
@@ -222,6 +261,65 @@ macro_rules! match_shapes_algo {
             (Shapes::MultiLineString(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
             (Shapes::Polygon(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
             (Shapes::MultiPolygon(p), Shapes::Rect(q)) => $algo.$method(p.as_ref(), q.as_ref()),
+
+            (Shapes::GeometryCollection(p), Shapes::Point(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::Line(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::LineString(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::MultiPoint(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::MultiLineString(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::Polygon(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::MultiPolygon(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::Triangle(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::Rect(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::GeometryCollection(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+
+            (Shapes::Point(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::Line(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::LineString(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::MultiPoint(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::MultiLineString(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::Polygon(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::MultiPolygon(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::Triangle(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
+            (Shapes::Rect(p), Shapes::GeometryCollection(q)) => {
+                $algo.$method(p.as_ref(), q.as_ref())
+            }
         }
     };
 }
@@ -238,22 +336,7 @@ macro_rules! match_shape {
             Shapes::Line(p) => p.$method(),
             Shapes::Triangle(p) => p.$method(),
             Shapes::Rect(p) => p.$method(),
-        }
-    };
-}
-
-macro_rules! match_shape_geom {
-    ($self:ident) => {
-        match &$self.inner {
-            Shapes::Point(p) => Geometry::Point(p.as_ref().to_owned()),
-            Shapes::MultiPoint(p) => Geometry::MultiPoint(p.as_ref().to_owned()),
-            Shapes::LineString(p) => Geometry::LineString(p.as_ref().to_owned()),
-            Shapes::MultiLineString(p) => Geometry::MultiLineString(p.as_ref().to_owned()),
-            Shapes::MultiPolygon(p) => Geometry::MultiPolygon(p.as_ref().to_owned()),
-            Shapes::Polygon(p) => Geometry::Polygon(p.as_ref().to_owned()),
-            Shapes::Line(p) => Geometry::Line(p.as_ref().to_owned()),
-            Shapes::Triangle(p) => Geometry::Triangle(p.as_ref().to_owned()),
-            Shapes::Rect(p) => Geometry::Rect(p.as_ref().to_owned()),
+            Shapes::GeometryCollection(p) => p.$method(),
         }
     };
 }
