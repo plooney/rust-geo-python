@@ -9,11 +9,11 @@ use geo::orient::{Direction, Orient};
 use geo::{
     Area, BooleanOps, BoundingRect, Buffer, Contains, ContainsProperly, Distance, Euclidean,
     Geometry, HausdorffDistance, Intersects, Line, LineString, MultiLineString, MultiPoint,
-    MultiPolygon, Point, Polygon, Rect, Simplify, Triangle, Validation, coord, unary_union, wkt,
+    MultiPolygon, Point, Polygon, Rect, Simplify, Triangle, Validation, coord, unary_union,
 };
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::{Bound, PyResult, Python};
-use pyo3::{IntoPyObjectExt, prelude::*};
+use pyo3::{IntoPyObjectExt, PyClassInitializer, prelude::*};
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -104,47 +104,124 @@ fn polygon_to_array2<'py>(
 }
 
 #[pyfunction]
-pub fn from_wkt<'py>(_py: Python<'py>, str: String) -> PyResult<RustShape> {
+pub fn from_wkt<'py>(py: Python<'py>, str: String) -> PyResult<Py<PyAny>> {
     let wktls: Wkt<f64> = Wkt::from_str(&str).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let geom: Geometry<f64> =
         Geometry::try_from(wktls).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
-    let shape = match geom {
-        Geometry::Point(p) => RustShape {
-            inner: Shapes::Point(Arc::new(p)),
-        },
-        Geometry::Line(l) => RustShape {
-            inner: Shapes::Line(Arc::new(l)),
-        },
-        Geometry::LineString(ls) => RustShape {
-            inner: Shapes::LineString(Arc::new(ls)),
-        },
-        Geometry::MultiPoint(mp) => RustShape {
-            inner: Shapes::MultiPoint(Arc::new(mp)),
-        },
-        Geometry::MultiLineString(mls) => RustShape {
-            inner: Shapes::MultiLineString(Arc::new(mls)),
-        },
-        Geometry::Polygon(p) => RustShape {
-            inner: Shapes::Polygon(Arc::new(p)),
-        },
-        Geometry::MultiPolygon(mp) => RustShape {
-            inner: Shapes::MultiPolygon(Arc::new(mp)),
-        },
-        Geometry::Triangle(t) => RustShape {
-            inner: Shapes::Triangle(Arc::new(t)),
-        },
-        Geometry::Rect(r) => RustShape {
-            inner: Shapes::Rect(Arc::new(r)),
-        },
-        Geometry::GeometryCollection(_) => {
-            return Err(PyTypeError::new_err(
-                "GeometryCollection is not supported by from_wkt",
+    match geom {
+        Geometry::Point(p) => {
+            let point_arc = Arc::new(p);
+            let initializer: PyClassInitializer<RustPoint> = PyClassInitializer::from((
+                RustPoint {
+                    point: point_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::Point(point_arc),
+                },
             ));
+            Ok(Py::new(py, initializer)?.into_any())
         }
-    };
-
-    Ok(shape)
+        Geometry::Line(l) => {
+            let line_arc = Arc::new(l);
+            let initializer: PyClassInitializer<RustLine> = PyClassInitializer::from((
+                RustLine {
+                    line: line_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::Line(line_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::LineString(ls) => {
+            let ls_arc = Arc::new(ls);
+            let initializer: PyClassInitializer<RustLineString> = PyClassInitializer::from((
+                RustLineString {
+                    linestring: ls_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::LineString(ls_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::MultiPoint(mp) => {
+            let mp_arc = Arc::new(mp);
+            let initializer: PyClassInitializer<RustMultiPoint> = PyClassInitializer::from((
+                RustMultiPoint {
+                    multipoint: mp_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::MultiPoint(mp_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::MultiLineString(mls) => {
+            let mls_arc = Arc::new(mls);
+            let initializer: PyClassInitializer<RustMultiLineString> = PyClassInitializer::from((
+                RustMultiLineString {
+                    multilinestring: mls_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::MultiLineString(mls_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::Polygon(p) => {
+            let polygon_arc = Arc::new(p);
+            let initializer: PyClassInitializer<RustPolygon> = PyClassInitializer::from((
+                RustPolygon {
+                    polygon: polygon_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::Polygon(polygon_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::MultiPolygon(mp) => {
+            let mp_arc = Arc::new(mp);
+            let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
+                RustMultiPolygon {
+                    multipolygon: mp_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::MultiPolygon(mp_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::Triangle(t) => {
+            let tri_arc = Arc::new(t);
+            let initializer: PyClassInitializer<RustTriangle> = PyClassInitializer::from((
+                RustTriangle {
+                    triangle: tri_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::Triangle(tri_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::Rect(r) => {
+            let rect_arc = Arc::new(r);
+            let initializer: PyClassInitializer<RustRect> = PyClassInitializer::from((
+                RustRect {
+                    rect: rect_arc.clone(),
+                },
+                RustShape {
+                    inner: Shapes::Rect(rect_arc),
+                },
+            ));
+            Ok(Py::new(py, initializer)?.into_any())
+        }
+        Geometry::GeometryCollection(_) => Err(PyTypeError::new_err(
+            "GeometryCollection is not supported by from_wkt",
+        )),
+    }
 }
 
 #[derive(Clone)]
