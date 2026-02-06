@@ -9,35 +9,52 @@ use geo::orient::{Direction, Orient};
 use geo::{
     Area, BooleanOps, BoundingRect, Buffer, Contains, ContainsProperly, Distance, Euclidean,
     Geometry, HausdorffDistance, Intersects, Line, LineString, MultiLineString, MultiPoint,
-    MultiPolygon, Point, Polygon, Rect, Simplify, Triangle, Validation, coord, unary_union,
+    MultiPolygon, Point, Polygon, Rect, Simplify, Triangle, Validation, coord, unary_union, wkt,
 };
-use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::{Bound, PyResult, Python};
 use pyo3::{IntoPyObjectExt, prelude::*};
-use std::fmt::Debug;
+use std::convert::TryFrom;
+use std::str::FromStr;
 use std::sync::Arc;
-use wkt::ToWkt;
+use wkt::{ToWkt, Wkt};
 
-fn array2_to_linestring<'py>(x: &PyReadonlyArray2<'py, f64>) -> LineString {
-    assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
+fn validate_xy_dimensions(shape: &[usize]) -> PyResult<()> {
+    if shape.len() != 2 || shape[1] != 2 {
+        return Err(PyValueError::new_err("array must be 2D with shape (n, 2)"));
+    }
+    Ok(())
+}
+
+fn validate_non_empty(shape: &[usize], name: &str) -> PyResult<()> {
+    if shape.is_empty() || shape[0] == 0 {
+        return Err(PyValueError::new_err(format!("{name} must be non-empty")));
+    }
+    Ok(())
+}
+
+fn array2_to_linestring<'py>(x: &PyReadonlyArray2<'py, f64>) -> PyResult<LineString> {
+    validate_xy_dimensions(x.shape())?;
+    validate_non_empty(x.shape(), "line string array")?;
+
     let path = x
         .as_array()
         .axis_iter(Axis(0))
         .map(|y| Point::new(y[0], y[1]))
         .collect::<LineString>();
-    path
+    Ok(path)
 }
 
 fn array2_to_polygon<'py>(
     x: &PyReadonlyArray2<'py, f64>,
     ys: &Vec<PyReadonlyArray2<'py, f64>>,
-) -> Polygon {
-    let exterior = array2_to_linestring(&x);
+) -> PyResult<Polygon> {
+    let exterior = array2_to_linestring(&x)?;
     let interiors = ys
         .iter()
         .map(|y| array2_to_linestring(y))
-        .collect::<Vec<LineString>>();
-    Polygon::new(exterior, interiors)
+        .collect::<PyResult<Vec<LineString>>>()?;
+    Ok(Polygon::new(exterior, interiors))
 }
 
 fn linestring_to_pyarray2<'py>(py: Python<'py>, ls: &LineString) -> Bound<'py, PyArray2<f64>> {
@@ -84,6 +101,50 @@ fn polygon_to_array2<'py>(
         .map(|ls| linestring_to_pyarray2(py, ls))
         .collect::<Vec<Bound<'py, PyArray2<f64>>>>();
     (ext_array, int_arrays)
+}
+
+#[pyfunction]
+pub fn from_wkt<'py>(_py: Python<'py>, str: String) -> PyResult<RustShape> {
+    let wktls: Wkt<f64> = Wkt::from_str(&str).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let geom: Geometry<f64> =
+        Geometry::try_from(wktls).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+    let shape = match geom {
+        Geometry::Point(p) => RustShape {
+            inner: Shapes::Point(Arc::new(p)),
+        },
+        Geometry::Line(l) => RustShape {
+            inner: Shapes::Line(Arc::new(l)),
+        },
+        Geometry::LineString(ls) => RustShape {
+            inner: Shapes::LineString(Arc::new(ls)),
+        },
+        Geometry::MultiPoint(mp) => RustShape {
+            inner: Shapes::MultiPoint(Arc::new(mp)),
+        },
+        Geometry::MultiLineString(mls) => RustShape {
+            inner: Shapes::MultiLineString(Arc::new(mls)),
+        },
+        Geometry::Polygon(p) => RustShape {
+            inner: Shapes::Polygon(Arc::new(p)),
+        },
+        Geometry::MultiPolygon(mp) => RustShape {
+            inner: Shapes::MultiPolygon(Arc::new(mp)),
+        },
+        Geometry::Triangle(t) => RustShape {
+            inner: Shapes::Triangle(Arc::new(t)),
+        },
+        Geometry::Rect(r) => RustShape {
+            inner: Shapes::Rect(Arc::new(r)),
+        },
+        Geometry::GeometryCollection(_) => {
+            return Err(PyTypeError::new_err(
+                "GeometryCollection is not supported by from_wkt",
+            ));
+        }
+    };
+
+    Ok(shape)
 }
 
 #[derive(Clone)]
@@ -200,17 +261,17 @@ impl RustIntersectionMatrix {
 #[pymethods]
 impl RustLineString {
     #[new]
-    fn new(x: PyReadonlyArray2<f64>) -> (Self, RustShape) {
-        let ls = array2_to_linestring(&x);
+    fn new(x: PyReadonlyArray2<f64>) -> PyResult<(Self, RustShape)> {
+        let ls = array2_to_linestring(&x)?;
         let ls_arc = Arc::new(ls);
-        (
+        Ok((
             RustLineString {
                 linestring: ls_arc.clone(),
             },
             RustShape {
                 inner: Shapes::LineString(ls_arc),
             },
-        )
+        ))
     }
 
     fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
@@ -223,20 +284,20 @@ impl RustLineString {
 #[pymethods]
 impl RustMultiPoint {
     #[new]
-    fn new(x: PyReadonlyArray2<f64>) -> (Self, RustShape) {
-        let ls = array2_to_linestring(&x);
+    fn new(x: PyReadonlyArray2<f64>) -> PyResult<(Self, RustShape)> {
+        let ls = array2_to_linestring(&x)?;
 
         let multipoint = ls.points().collect::<MultiPoint>();
         let multipoint_arc = Arc::new(multipoint);
 
-        (
+        Ok((
             RustMultiPoint {
                 multipoint: multipoint_arc.clone(),
             },
             RustShape {
                 inner: Shapes::MultiPoint(multipoint_arc),
             },
-        )
+        ))
     }
 
     fn xy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
@@ -356,17 +417,20 @@ impl RustPoint {
 #[pymethods]
 impl RustPolygon {
     #[new]
-    fn new(x: PyReadonlyArray2<f64>, ys: Vec<PyReadonlyArray2<f64>>) -> (Self, RustShape) {
-        let polygon = array2_to_polygon(&x, &ys).orient(Direction::Default);
+    fn new(
+        x: PyReadonlyArray2<f64>,
+        ys: Vec<PyReadonlyArray2<f64>>,
+    ) -> PyResult<(Self, RustShape)> {
+        let polygon = array2_to_polygon(&x, &ys)?.orient(Direction::Default);
         let polygon_arc = Arc::new(polygon);
-        (
+        Ok((
             RustPolygon {
                 polygon: polygon_arc.clone(),
             },
             RustShape {
                 inner: Shapes::Polygon(polygon_arc),
             },
-        )
+        ))
     }
 
     fn xy<'py>(
@@ -398,20 +462,20 @@ impl RustPolygon {
 #[pymethods]
 impl RustMultiLineString {
     #[new]
-    fn new(ys: Vec<PyReadonlyArray2<f64>>) -> (Self, RustShape) {
+    fn new(ys: Vec<PyReadonlyArray2<f64>>) -> PyResult<(Self, RustShape)> {
         let lss = ys
             .iter()
             .map(|x| array2_to_linestring(x))
-            .collect::<MultiLineString>();
-        let lss_arc = Arc::new(lss);
-        (
+            .collect::<PyResult<Vec<LineString>>>()?;
+        let lss_arc = Arc::new(MultiLineString::new(lss));
+        Ok((
             RustMultiLineString {
                 multilinestring: lss_arc.clone(),
             },
             RustShape {
                 inner: Shapes::MultiLineString(lss_arc),
             },
-        )
+        ))
     }
 
     fn xy<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyArray2<f64>>>> {
@@ -429,21 +493,21 @@ impl RustMultiPolygon {
     #[new]
     fn new(
         pyarrays: Vec<(PyReadonlyArray2<f64>, Vec<PyReadonlyArray2<f64>>)>,
-    ) -> (Self, RustShape) {
+    ) -> PyResult<(Self, RustShape)> {
         let polygons = pyarrays
             .iter()
-            .map(|(x, ys)| array2_to_polygon(&x, &ys).orient(Direction::Default))
-            .collect::<Vec<Polygon>>();
+            .map(|(x, ys)| array2_to_polygon(&x, &ys).map(|p| p.orient(Direction::Default)))
+            .collect::<PyResult<Vec<Polygon>>>()?;
         let multipolygon = MultiPolygon(polygons);
         let multipolygon_arc = Arc::new(multipolygon);
-        (
+        Ok((
             RustMultiPolygon {
                 multipolygon: multipolygon_arc.clone(),
             },
             RustShape {
                 inner: Shapes::MultiPolygon(multipolygon_arc),
             },
-        )
+        ))
     }
 
     fn xy<'py>(
