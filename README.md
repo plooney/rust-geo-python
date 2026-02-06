@@ -5,7 +5,7 @@ Fast 2D geometry for Python implemented in Rust. This project exposes `geo`-powe
 **Status:** early, API may change.
 
 ## Features
-- Python classes for core shapes: point, line, line string, polygon, multipolygon, rect, triangle, and shape collections.
+- Python classes for core shapes: point, line, line string, polygon, multipolygon, rect, triangle, and geometry collections.
 - Geometry operations: distance, containment, intersection/union/difference, buffer, area, validity checks, and relations.
 - Vectorized distance helpers that operate on NumPy arrays.
 - Optional robust overlay utilities for tiling workflows.
@@ -71,6 +71,7 @@ Python module: `rust_geo_python`
 - `RustMultiPolygon`
 - `RustTriangle`
 - `RustRect`
+- `RustGeometryCollection`
 - `RustGeomVecCollection`
 - `RustIntersectionMatrix`
 
@@ -104,11 +105,15 @@ Python module: `rust_geo_python`
 `RustGeomVecCollection`:
 - `distance(other)` (pairwise distance matrix)
 
+`RustGeometryCollection`:
+- `len()`
+
 ### Functions
 - `point_polygon_distance(point_xy, polygon_xy)`
 - `points_polygon_distance(points_xy, polygon_xy)`
 - `points_polygon_dist_mut(points_xy, polygon_xy)` (parallelized)
 - `polygon_polygon_distance(polygon_xy, polygon_xy)`
+- `from_wkt(wkt_string)`
 - `union(polygons)`
 - `union_with_adapter(polygons, rect)`
 - `intersection(polygon, polygon)`
@@ -122,6 +127,8 @@ Python module: `rust_geo_python`
 - Coordinates are `float64`.
 - Polygon rings are expected to be closed (first point == last point).
 - Boolean ops on shapes currently support polygon and multipolygon combinations.
+- `from_wkt` returns the most specific class (e.g., `RustPoint`, `RustPolygon`, `RustGeometryCollection`).
+- `buffer()` is not supported for `RustGeometryCollection`.
 
 ## Development
 Run tests:
