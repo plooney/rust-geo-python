@@ -119,30 +119,15 @@ pub fn intersect_tile_using_buffered_adapter(
 pub fn intersect_tile_using_buffered_adapter_mpg(
     multipolygon: &MultiPolygon,
     tile_polygon: &Polygon,
+    rect: &Rect,
 ) -> MultiPolygon {
-    let rect_option = multipolygon.bounding_rect();
-    if let Some(rect) = rect_option {
-        if let Some(tile_rect) = tile_polygon.bounding_rect() {
-            let tile_width = 2.0 * tile_rect.width();
-            let tile_height = 2.0 * tile_rect.height();
-            // make the rect slightly larger as a buffer
-            let buffer_rect = FloatRect::new(
-                rect.min().x - tile_width,
-                rect.max().x + tile_width,
-                rect.min().y - tile_height,
-                rect.max().y + tile_height,
-            );
-            let adapter = FloatPointAdapter::new(buffer_rect);
-            let mpgs = multipolygon
-                .iter()
-                .flat_map(|x| {
-                    intersect_tile_using_buffered_adapter(x, tile_polygon, adapter.clone())
-                })
-                .collect::<MultiPolygon>();
-            return mpgs;
-        }
-    }
-    MultiPolygon::empty()
+    let buffer_rect = FloatRect::new(rect.min().x, rect.max().x, rect.min().y, rect.max().y);
+    let adapter = FloatPointAdapter::new(buffer_rect);
+    let mpgs = multipolygon
+        .iter()
+        .flat_map(|x| intersect_tile_using_buffered_adapter(x, tile_polygon, adapter.clone()))
+        .collect::<MultiPolygon>();
+    return mpgs;
 }
 
 pub fn unary_union_with_adapter<'a, B: BooleanOps + 'a>(

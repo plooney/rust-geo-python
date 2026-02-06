@@ -14,6 +14,7 @@ use geo::{
 use pyo3::exceptions::PyTypeError;
 use pyo3::{Bound, PyResult, Python};
 use pyo3::{IntoPyObjectExt, prelude::*};
+use std::fmt::Debug;
 use std::sync::Arc;
 use wkt::ToWkt;
 
@@ -314,6 +315,20 @@ impl RustRect {
         let pyarray = PyArray2::from_owned_array(py, arr);
         Ok(pyarray)
     }
+
+    fn to_polygon<'py>(&self, py: Python<'py>) -> PyResult<Py<RustPolygon>> {
+        let polygon = self.rect.to_polygon();
+        let polygon_arc = Arc::new(polygon);
+        let initializer: PyClassInitializer<RustPolygon> = PyClassInitializer::from((
+            RustPolygon {
+                polygon: polygon_arc.clone(),
+            },
+            RustShape {
+                inner: Shapes::Polygon(polygon_arc),
+            },
+        ));
+        Ok(Py::new(py, initializer)?)
+    }
 }
 
 #[pymethods]
@@ -464,8 +479,13 @@ impl RustMultiPolygon {
 
 #[pymethods]
 impl RustShape {
+    //fn scale(&self, rhs: &RustShape) -> PyResult<Py<PyAny>> {}
     fn distance(&self, rhs: &RustShape) -> f64 {
         match_shapes_algo!(self, rhs, Euclidean, distance)
+    }
+
+    fn unsigned_area(&self) -> f64 {
+        match_shape!(self, unsigned_area)
     }
 
     fn hausdorff_distance(&self, rhs: &RustShape) -> f64 {
@@ -473,7 +493,17 @@ impl RustShape {
     }
 
     fn bounding_rect<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
-        let rect_option: Option<Rect> = match_shape!(self, bounding_rect).into();
+        let rect_option = match &self.inner {
+            Shapes::Point(p) => Some(p.bounding_rect()),
+            Shapes::MultiPoint(p) => p.bounding_rect(),
+            Shapes::LineString(p) => p.bounding_rect(),
+            Shapes::MultiLineString(p) => p.bounding_rect(),
+            Shapes::MultiPolygon(p) => p.bounding_rect(),
+            Shapes::Polygon(p) => p.bounding_rect(),
+            Shapes::Line(p) => Some(p.bounding_rect()),
+            Shapes::Triangle(p) => Some(p.bounding_rect()),
+            Shapes::Rect(p) => Some(p.bounding_rect()),
+        };
         if let Some(rect) = rect_option {
             let rect_arc = Arc::new(rect);
             let initializer: PyClassInitializer<RustRect> = PyClassInitializer::from((
@@ -803,10 +833,12 @@ pub fn intersect_tile<'py>(
     py: Python<'py>,
     polygon: RustMultiPolygon,
     tile_polygon: RustPolygon,
+    rust_rect: RustRect,
 ) -> PyResult<Py<PyAny>> {
     let mpg = intersect_tile_using_buffered_adapter_mpg(
         polygon.multipolygon.as_ref(),
         tile_polygon.polygon.as_ref(),
+        rust_rect.rect.as_ref(),
     );
     mpg_to_pyany(py, mpg)
 }
