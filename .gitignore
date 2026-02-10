@@ -1,7 +1,13 @@
 *
 !Cargo.toml
+!tests
+!tests/*
 !src
 !src/*
+!src/core/*
+!src/core/
+!src/py/*
+!src/py/
 !pyproject.toml
 !README.md
 !LICENSE.txt
