@@ -3,20 +3,34 @@ name = "rust-geo-python"
 version = "0.1.8"
 authors = ["plooney"]
 edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/plooney/rust-geo-python"
+description = "A python wrapper aroung geo"
 
 [lib]
 name = "rust_geo_python"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.27.2", features = ["extension-module", "abi3-py37", "generate-import-lib"] }
+pyo3 = { version = "0.27.2", features = ["extension-module", "generate-import-lib", "chrono"] }
 ndarray = {version="0.17.2", features = ["rayon"]}
 numpy = "0.27.1"
 geo = { version = "0.32.0" }
+geo-types = { version = "0.7.15", features = ["use-rstar_0_12"]}
 i_overlay = "4.0.7"
 wkt = "0.14.0"
 wkb = "0.9.2"
 num-traits = "0.2.19"
+geoarrow = { version = "0.5", optional = true }
+geoarrow-array = { version = "0.5", optional = true }
+pyo3-arrow = { version = "0.13", optional = true }
+arrow-array = { version = "56", optional = true }
+arrow-schema = { version = "56", optional = true }
+rstar = "0.12.2"
+geo-index = "0.3.4"
+
+[features]
+geoarrow = ["dep:geoarrow", "dep:geoarrow-array", "dep:pyo3-arrow", "dep:arrow-array", "dep:arrow-schema"]
 
 [profile.release]
 lto = true
@@ -34,4 +48,3 @@ rustflags = [
 	"-C", "link-arg=-undefined",
 	"-C", "link-arg=dynamic_lookup",
 ]
-

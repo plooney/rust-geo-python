@@ -340,3 +340,20 @@ macro_rules! match_shape {
         }
     };
 }
+
+macro_rules! match_shape_arg {
+    ($self:ident, $method:ident, $arg: ident) => {
+        match &$self.inner {
+            Shapes::Point(p) => p.$method($arg),
+            Shapes::MultiPoint(p) => p.$method($arg),
+            Shapes::LineString(p) => p.$method($arg),
+            Shapes::MultiLineString(p) => p.$method($arg),
+            Shapes::MultiPolygon(p) => p.$method($arg),
+            Shapes::Polygon(p) => p.$method($arg),
+            Shapes::Line(p) => p.$method($arg),
+            Shapes::Triangle(p) => p.$method($arg),
+            Shapes::Rect(p) => p.$method($arg),
+            Shapes::GeometryCollection(p) => p.$method($arg),
+        }
+    };
+}

@@ -8,15 +8,16 @@ use geo::algorithm::Relate;
 use geo::algorithm::relate::IntersectionMatrix;
 use geo::orient::{Direction, Orient};
 use geo::{
-    Area, BooleanOps, BoundingRect, Buffer, Contains, ContainsProperly, Distance, Euclidean,
-    Geometry, GeometryCollection, HausdorffDistance, Intersects, Line, LineString, MultiLineString,
-    MultiPoint, MultiPolygon, Point, Polygon, Rect, Simplify, Triangle, Validation, coord,
-    unary_union,
+    Area, BooleanOps, BoundingRect, Buffer, Closest, ClosestPoint, Contains, ContainsProperly,
+    Distance, Euclidean, Geometry, GeometryCollection, HausdorffDistance, Intersects, Line,
+    LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Rect, Simplify,
+    Triangle, Validation, coord, unary_union,
 };
 use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
+use pyo3::types::{PyIterator, PyList};
 use pyo3::{Bound, PyResult, Python};
 use pyo3::{IntoPyObjectExt, PyClassInitializer, prelude::*};
-use pyo3::types::{PyIterator, PyList};
+use rstar::{AABB, RTreeObject};
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -529,7 +530,9 @@ impl RustGeometryCollection {
             idx += len;
         }
         if idx < 0 || idx >= len {
-            return Err(PyIndexError::new_err("GeometryCollection index out of range"));
+            return Err(PyIndexError::new_err(
+                "GeometryCollection index out of range",
+            ));
         }
         let geom = self.geometry_collection[idx as usize].clone();
         geometry_to_pyany(py, geom)
@@ -692,8 +695,33 @@ impl RustMultiPolygon {
     }
 }
 
+/// A generic function which takes some iterator of points and gives you the
+/// "best" `Closest` it can find. Where "best" is the first intersection or
+/// the `Closest::SinglePoint` which is closest to `p`.
+///
+/// If the iterator is empty, we get `Closest::Indeterminate`.
+fn closest_of<I>(iter: I, p: Point<f64>) -> Point<f64>
+where
+    I: IntoIterator<Item = Point<f64>>,
+{
+    let mut iterator = iter.into_iter();
+    let mut best = iterator.next().unwrap();
+    let mut mindist = Euclidean.distance(&best, &p);
+    for element in iterator {
+        if Euclidean.distance(&best, &p) < mindist {
+            best = p;
+        }
+        if matches!(best, p) {
+            // short circuit - nothing can be closer than an intersection
+            return best;
+        }
+    }
+
+    best
+}
+
 impl RustShape {
-    fn to_geometry(&self) -> Geometry {
+    pub(crate) fn to_geometry(&self) -> Geometry {
         match &self.inner {
             Shapes::Point(p) => Geometry::Point(p.as_ref().to_owned()),
             Shapes::MultiPoint(p) => Geometry::MultiPoint(p.as_ref().to_owned()),
@@ -787,18 +815,7 @@ impl RustShape {
     }
 
     fn buffer<'py>(&self, py: Python<'py>, radius: f64) -> PyResult<Py<PyAny>> {
-        let polygons = match &self.inner {
-            Shapes::Point(p) => p.buffer(radius),
-            Shapes::MultiPoint(p) => p.buffer(radius),
-            Shapes::LineString(p) => p.buffer(radius),
-            Shapes::MultiLineString(p) => p.buffer(radius),
-            Shapes::MultiPolygon(p) => p.buffer(radius),
-            Shapes::Polygon(p) => p.buffer(radius),
-            Shapes::Line(p) => p.buffer(radius),
-            Shapes::Triangle(p) => p.buffer(radius),
-            Shapes::Rect(p) => p.buffer(radius),
-            Shapes::GeometryCollection(p) => p.buffer(radius),
-        };
+        let polygons = match_shape_arg!(self, buffer, radius);
         let multipolygon_arc = Arc::new(polygons);
         let initializer: PyClassInitializer<RustMultiPolygon> = PyClassInitializer::from((
             RustMultiPolygon {
@@ -809,6 +826,18 @@ impl RustShape {
             },
         ));
         Ok(Py::new(py, initializer)?.into_any())
+    }
+
+    fn closest_point<'py>(&self, py: Python<'py>, rhs: &RustPoint) -> PyResult<Py<PyAny>> {
+        let point = &rhs.point;
+
+        let closest = match_shape_arg!(self, closest_point, point);
+        match closest {
+            Closest::Intersection(p) | Closest::SinglePoint(p) => {
+                geometry_to_pyany(py, Geometry::Point(p))
+            }
+            Closest::Indeterminate => Ok(py.None()),
+        }
     }
 
     fn intersection<'py>(&self, py: Python<'py>, rhs: &RustShape) -> PyResult<Py<PyAny>> {
@@ -1093,6 +1122,18 @@ pub struct RustGeomVecCollection {
     geoms: Vec<Geometry>,
 }
 
+impl RustPolygon {
+    pub(crate) fn polygon_ref(&self) -> &Polygon {
+        self.polygon.as_ref()
+    }
+}
+
+impl RustGeomVecCollection {
+    pub(crate) fn geoms_ref(&self) -> &[Geometry] {
+        self.geoms.as_slice()
+    }
+}
+
 #[allow(dead_code)]
 fn array2_to_points<'py>(x: &PyReadonlyArray2<'py, f64>) -> Vec<Point<f64>> {
     assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
@@ -1151,5 +1192,108 @@ impl RustGeomVecCollection {
         });
 
         Ok(arr.to_pyarray(py))
+    }
+
+    fn boundary(&self) -> PyResult<RustGeomVecCollection> {
+        let mut geoms = Vec::with_capacity(self.geoms.len());
+        for geom in self.geoms.iter() {
+            if let Some(boundary) = geometry_boundary(geom)? {
+                geoms.push(boundary);
+            }
+        }
+        Ok(RustGeomVecCollection { geoms })
+    }
+}
+
+fn geometry_boundary(geom: &Geometry) -> PyResult<Option<Geometry>> {
+    match geom {
+        Geometry::Point(_) => Err(PyValueError::new_err(
+            "boundary is not defined for Point geometries",
+        )),
+        Geometry::MultiPoint(_) => Err(PyValueError::new_err(
+            "boundary is not defined for MultiPoint geometries",
+        )),
+        Geometry::Line(l) => {
+            let ps = l.points();
+            let multipoint = MultiPoint::new(vec![ps.0, ps.1]);
+            Ok(Some(Geometry::MultiPoint(multipoint)))
+        }
+        Geometry::LineString(ls) => {
+            let multipoint = ls.points().collect::<MultiPoint>();
+            Ok(Some(Geometry::MultiPoint(multipoint)))
+        }
+        Geometry::MultiLineString(mls) => {
+            let points: Vec<Point<f64>> = Vec::new();
+            let multipoint = MultiPoint::new(mls.iter().fold(points, |mut points, x| {
+                points.extend(&x.clone().into_points());
+                points
+            }));
+            Ok(Some(Geometry::MultiPoint(multipoint)))
+        }
+        Geometry::Polygon(p) => {
+            let mut lss: Vec<LineString<f64>> = Vec::new();
+            lss.push(p.exterior().clone());
+            lss.extend(p.interiors().to_vec());
+            Ok(Some(Geometry::MultiLineString(MultiLineString::new(lss))))
+        }
+        Geometry::MultiPolygon(mp) => {
+            let lss: Vec<LineString<f64>> = Vec::new();
+            let multilinestring = MultiLineString::new(mp.iter().fold(lss, |mut lss, x| {
+                lss.push(x.exterior().clone());
+                lss.extend(x.interiors().to_vec());
+                lss
+            }));
+            Ok(Some(Geometry::MultiLineString(multilinestring)))
+        }
+        Geometry::Triangle(t) => {
+            let ls = t.to_polygon().exterior().clone();
+            Ok(Some(Geometry::LineString(ls)))
+        }
+        Geometry::Rect(r) => {
+            let ls = r.to_polygon().exterior().clone();
+            Ok(Some(Geometry::LineString(ls)))
+        }
+        Geometry::GeometryCollection(_) => Ok(None),
+    }
+}
+
+impl RTreeObject for RustShape {
+    type Envelope = AABB<[f64; 2]>;
+
+    fn envelope(&self) -> Self::Envelope {
+        fn rect_to_aabb(rect: Rect) -> AABB<[f64; 2]> {
+            AABB::from_corners([rect.min().x, rect.min().y], [rect.max().x, rect.max().y])
+        }
+
+        match &self.inner {
+            Shapes::Point(p) => AABB::from_point([p.0.x, p.0.y]),
+            Shapes::MultiPoint(p) => p
+                .bounding_rect()
+                .map(rect_to_aabb)
+                .expect("MultiPoint has no bounding rect"),
+            Shapes::LineString(p) => p
+                .bounding_rect()
+                .map(rect_to_aabb)
+                .expect("LineString has no bounding rect"),
+            Shapes::MultiLineString(p) => p
+                .bounding_rect()
+                .map(rect_to_aabb)
+                .expect("MultiLineString has no bounding rect"),
+            Shapes::MultiPolygon(p) => p
+                .bounding_rect()
+                .map(rect_to_aabb)
+                .expect("MultiPolygon has no bounding rect"),
+            Shapes::Polygon(p) => p
+                .bounding_rect()
+                .map(rect_to_aabb)
+                .expect("Polygon has no bounding rect"),
+            Shapes::Line(p) => rect_to_aabb(p.bounding_rect()),
+            Shapes::Triangle(p) => rect_to_aabb(p.bounding_rect()),
+            Shapes::Rect(p) => rect_to_aabb(p.bounding_rect()),
+            Shapes::GeometryCollection(p) => p
+                .bounding_rect()
+                .map(rect_to_aabb)
+                .expect("GeometryCollection has no bounding rect"),
+        }
     }
 }
