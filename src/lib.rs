@@ -21,4 +21,13 @@ mod rust_geo_python {
         points_poly_distance_mut_py, points_poly_distance_py, poly_poly_distance_py,
         union_set_shapes,
     };
+
+    #[pymodule_export]
+    use crate::py::rtree::RustRTree;
+    #[pymodule_export]
+    use crate::py::geo_index::RustGeoIndex;
+
+    #[cfg(feature = "geoarrow")]
+    #[pymodule_export]
+    use crate::py::geoarrow::{geoarray_from_geom_vec_collection, geoarray_from_polygons};
 }
