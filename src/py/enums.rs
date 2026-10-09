@@ -4,14 +4,16 @@ use numpy::{PyArray2, PyReadonlyArray2, PyUntypedArrayMethods};
 
 use crate::core::tiling::{intersect_tile_using_buffered_adapter_mpg, unary_union_with_adapter};
 use crate::error::{validate_non_empty, validate_xy_dimensions};
+use crate::py::closest_points::collect_closest_points_from_shape;
+use crate::py::closest_regions::closest_region_to_polygon;
 use geo::algorithm::Relate;
 use geo::algorithm::relate::IntersectionMatrix;
 use geo::orient::{Direction, Orient};
 use geo::{
-    Area, BooleanOps, BoundingRect, Buffer, Closest, ClosestPoint, Contains, ContainsProperly,
-    Distance, Euclidean, Geometry, GeometryCollection, HausdorffDistance, Intersects, Line,
-    LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Rect, Simplify,
-    Triangle, Validation, coord, unary_union,
+    Area, BooleanOps, BoundingRect, Buffer, Contains, ContainsProperly, Distance, Euclidean,
+    Geometry, GeometryCollection, HausdorffDistance, Intersects, Line, LineString, MultiLineString,
+    MultiPoint, MultiPolygon, Point, Polygon, Rect, Simplify, Triangle, Validation, coord,
+    unary_union,
 };
 use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
 use pyo3::types::{PyIterator, PyList};
@@ -695,31 +697,6 @@ impl RustMultiPolygon {
     }
 }
 
-/// A generic function which takes some iterator of points and gives you the
-/// "best" `Closest` it can find. Where "best" is the first intersection or
-/// the `Closest::SinglePoint` which is closest to `p`.
-///
-/// If the iterator is empty, we get `Closest::Indeterminate`.
-fn closest_of<I>(iter: I, p: Point<f64>) -> Point<f64>
-where
-    I: IntoIterator<Item = Point<f64>>,
-{
-    let mut iterator = iter.into_iter();
-    let mut best = iterator.next().unwrap();
-    let mut mindist = Euclidean.distance(&best, &p);
-    for element in iterator {
-        if Euclidean.distance(&best, &p) < mindist {
-            best = p;
-        }
-        if matches!(best, p) {
-            // short circuit - nothing can be closer than an intersection
-            return best;
-        }
-    }
-
-    best
-}
-
 impl RustShape {
     pub(crate) fn to_geometry(&self) -> Geometry {
         match &self.inner {
@@ -831,12 +808,18 @@ impl RustShape {
     fn closest_point<'py>(&self, py: Python<'py>, rhs: &RustPoint) -> PyResult<Py<PyAny>> {
         let point = &rhs.point;
 
-        let closest = match_shape_arg!(self, closest_point, point);
-        match closest {
-            Closest::Intersection(p) | Closest::SinglePoint(p) => {
-                geometry_to_pyany(py, Geometry::Point(p))
-            }
-            Closest::Indeterminate => Ok(py.None()),
+        let closest_points = collect_closest_points_from_shape(&self.inner, point.as_ref());
+        match closest_points.len() {
+            0 => Ok(py.None()),
+            1 => geometry_to_pyany(py, Geometry::Point(closest_points[0])),
+            _ => geometry_to_pyany(py, Geometry::MultiPoint(MultiPoint::new(closest_points))),
+        }
+    }
+
+    fn closest_region<'py>(&self, py: Python<'py>, rhs: &RustPolygon) -> PyResult<Py<PyAny>> {
+        match closest_region_to_polygon(&self.inner, rhs.polygon.as_ref()) {
+            Some(region) => geometry_to_pyany(py, region),
+            None => Err(PyTypeError::new_err("Not implemented yet")),
         }
     }
 
@@ -1120,18 +1103,6 @@ pub fn point_in_polygon<'py>(rust_point: RustPoint, rust_polygon: RustPolygon) -
 #[derive(Clone)]
 pub struct RustGeomVecCollection {
     geoms: Vec<Geometry>,
-}
-
-impl RustPolygon {
-    pub(crate) fn polygon_ref(&self) -> &Polygon {
-        self.polygon.as_ref()
-    }
-}
-
-impl RustGeomVecCollection {
-    pub(crate) fn geoms_ref(&self) -> &[Geometry] {
-        self.geoms.as_slice()
-    }
 }
 
 #[allow(dead_code)]
