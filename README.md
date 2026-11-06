@@ -119,9 +119,29 @@ Python module: `rust_geo_python`
 - `intersection(polygon, polygon)`
 - `intersect_tile(multipolygon, tile_polygon, rect)`
 - `point_in_polygon(point, polygon)`
+- `update_circle_areas_using_boundaries(...)` (updates and returns circle areas clipped to included polygon regions, subtracting interior holes)
 - `union_set_shapes(...)`
 - `intersection_shapes(...)`
 - `difference_shapes(...)`
+
+Circle areas can be clipped analytically against polygon boundaries, including holes. The `areas` NumPy array is updated in place and returned:
+
+```python
+areas = np.array([np.pi * radius**2], dtype=np.float64)
+areas = rg.update_circle_areas_using_boundaries(
+    point_locations=np.array([[0.0, 2.0]], dtype=np.float64),
+    areas=areas,
+    distance_to_boundary=np.array([[1.0]], dtype=np.float64),
+    radius=radius,
+    remain_within_connected_component=False,
+    boundaries_as_shapes=[{
+        "outer boundary": outer_boundary,
+        "interior boundary": [excluded_square],
+    }],
+)
+```
+
+Each boundary dictionary uses an `"outer boundary"` coordinate array and an optional `"interior boundary"` list of hole arrays. `distance_to_boundary` remains in the signature for compatibility; the calculation uses the rings directly. With `remain_within_connected_component=False`, areas from all supplied regions are included; with it enabled, each circle is restricted to the region containing its center.
 
 ## Notes
 - Coordinates are `float64`.

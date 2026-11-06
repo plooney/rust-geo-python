@@ -19,15 +19,15 @@ mod rust_geo_python {
     use crate::py::pyfunctions::{
         difference_shapes, intersection_shapes, point_poly_distance_py,
         points_poly_distance_mut_py, points_poly_distance_py, poly_poly_distance_py,
-        union_set_shapes,
+        union_set_shapes, update_circle_areas_using_boundaries,
     };
 
     #[pymodule_export]
-    use crate::py::rtree::RustRTree;
-    #[pymodule_export]
     use crate::py::geo_index::RustGeoIndex;
+    #[pymodule_export]
+    use crate::py::rtree::RustRTree;
 
-    #[cfg(feature = "geoarrow")]
+    //#[cfg(feature = "geoarrow")]
     #[pymodule_export]
     use crate::py::geoarrow::{geoarray_from_geom_vec_collection, geoarray_from_polygons};
 }

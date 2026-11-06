@@ -1,6 +1,6 @@
 use crate::py::enums::Shapes;
 use geo::algorithm::bool_ops::BooleanOps;
-use geo::line_intersection::{LineIntersection, line_intersection};
+use geo::line_intersection::{line_intersection, LineIntersection};
 use geo::{
     Closest, ClosestPoint, Coord, Distance, Euclidean, Geometry, Line, LineString, MultiLineString,
     Point, Polygon,
@@ -153,6 +153,45 @@ fn closest_region_between_segments(source: &Line<f64>, target: &Line<f64>) -> Se
             }
             LineIntersection::Collinear { intersection } => SegmentRegion::Line(intersection),
         };
+    }
+
+    let source_dx = source.end.x - source.start.x;
+    let source_dy = source.end.y - source.start.y;
+    let target_dx = target.end.x - target.start.x;
+    let target_dy = target.end.y - target.start.y;
+    let source_length_squared = source_dx * source_dx + source_dy * source_dy;
+    let cross = source_dx * target_dy - source_dy * target_dx;
+
+    if source_length_squared > 0.0 && cross.abs() <= REGION_EPSILON * source_length_squared.sqrt() {
+        let start_projection = ((target.start.x - source.start.x) * source_dx
+            + (target.start.y - source.start.y) * source_dy)
+            / source_length_squared;
+        let end_projection = ((target.end.x - source.start.x) * source_dx
+            + (target.end.y - source.start.y) * source_dy)
+            / source_length_squared;
+        let overlap_start = 0.0_f64.max(start_projection.min(end_projection));
+        let overlap_end = 1.0_f64.min(start_projection.max(end_projection));
+
+        if overlap_end - overlap_start > REGION_EPSILON {
+            let point_at = |projection: f64| {
+                Point::new(
+                    source.start.x + projection * source_dx,
+                    source.start.y + projection * source_dy,
+                )
+            };
+            let start = point_at(overlap_start);
+            let end = point_at(overlap_end);
+            return SegmentRegion::Line(Line::new(
+                Coord {
+                    x: start.x(),
+                    y: start.y(),
+                },
+                Coord {
+                    x: end.x(),
+                    y: end.y(),
+                },
+            ));
+        }
     }
 
     let mut best_point = point_from_coord(source.start);

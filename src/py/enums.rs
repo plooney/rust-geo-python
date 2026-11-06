@@ -1105,6 +1105,18 @@ pub struct RustGeomVecCollection {
     geoms: Vec<Geometry>,
 }
 
+impl RustPolygon {
+    pub(crate) fn polygon_ref(&self) -> &Polygon {
+        self.polygon.as_ref()
+    }
+}
+
+impl RustGeomVecCollection {
+    pub(crate) fn geoms_ref(&self) -> &[Geometry] {
+        self.geoms.as_slice()
+    }
+}
+
 #[allow(dead_code)]
 fn array2_to_points<'py>(x: &PyReadonlyArray2<'py, f64>) -> Vec<Point<f64>> {
     assert_eq!(x.shape()[1], 2, "Y dimension not equal to 2");
