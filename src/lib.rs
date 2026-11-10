@@ -4,6 +4,8 @@ mod core;
 mod error;
 mod py;
 
+pub use crate::core::circle_intersection::{circle_areas_inside_regions, CircleIntersectionError};
+
 #[pyo3::pymodule]
 mod rust_geo_python {
 

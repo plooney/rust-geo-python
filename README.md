@@ -143,9 +143,31 @@ areas = rg.update_circle_areas_using_boundaries(
 
 Each boundary dictionary uses an `"outer boundary"` coordinate array and an optional `"interior boundary"` list of hole arrays. `distance_to_boundary` remains in the signature for compatibility; the calculation uses the rings directly. With `remain_within_connected_component=False`, areas from all supplied regions are included; with it enabled, each circle is restricted to the region containing its center.
 
+Rust callers can use the same analytic calculation directly with GeoRust primitives:
+
+```rust
+use geo::{LineString, Point, Polygon};
+use rust_geo_python::circle_areas_inside_regions;
+
+let region = Polygon::new(
+    LineString::from(vec![
+        (-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0), (-2.0, -2.0),
+    ]),
+    vec![],
+);
+let areas = circle_areas_inside_regions(
+    &[Point::new(0.0, 0.0)],
+    1.0,
+    &[region],
+    false,
+).unwrap();
+```
+
+This Rust API accepts `geo::Point<f64>` centers and `geo::Polygon<f64>` regions. It uses GeoRust's `Intersects` predicate when selecting the connected component. The analytic circle–edge calculation uses an outward-rounded interval filter and exact dyadic fallback to classify tangencies without an epsilon cutoff. The `robust` crate's orientation and incircle predicates do not directly express this arbitrary-radius line–circle test, so the fallback computes its exact sign locally. Errors, including non-finite coordinates, are returned as `CircleIntersectionError`.
+
 ## Notes
 - Coordinates are `float64`.
-- Polygon rings are expected to be closed (first point == last point).
+- Rust `Polygon` rings should be closed (first coordinate == last coordinate); the Python adapter closes open input rings.
 - Boolean ops on shapes currently support polygon and multipolygon combinations.
 - `from_wkt` returns the most specific class (e.g., `RustPoint`, `RustPolygon`, `RustGeometryCollection`).
 - `buffer()` is not supported for `RustGeometryCollection`.
