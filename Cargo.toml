@@ -21,6 +21,7 @@ i_overlay = "4.0.7"
 wkt = "0.14.0"
 wkb = "0.9.2"
 num-traits = "0.2.19"
+num-bigint = "0.4.6"
 geoarrow = { version = "0.5", optional = true }
 geoarrow-array = { version = "0.5", optional = true }
 pyo3-arrow = { version = "0.13", optional = true }
