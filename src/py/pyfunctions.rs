@@ -1,43 +1,55 @@
-use crate::core::circle_intersection::{BoundaryRegion, circle_areas_inside_regions};
+use crate::core::circle_intersection::circle_areas_inside_regions;
 use crate::core::functions::{array2_to_polygon, point_poly_distance, polygons_to_array2};
 use crate::error::{validate_non_empty, validate_point_dimensions, validate_xy_dimensions};
 use ndarray::parallel::prelude::IntoParallelIterator;
 use ndarray::parallel::prelude::ParallelIterator;
 
-use geo::{BooleanOps, Distance, Euclidean, LineString, Point, Polygon, unary_union};
+use geo::{unary_union, BooleanOps, Coord, Distance, Euclidean, LineString, Point, Polygon};
 use numpy::ndarray::{Array1, Axis};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
     PyUntypedArrayMethods,
 };
-use pyo3::{Bound, PyResult, Python};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyDictMethods, PyIterator, PyList, PyListMethods};
+use pyo3::{Bound, PyResult, Python};
 
-fn extract_coordinate_ring(ring: &Bound<'_, PyAny>, label: &str) -> PyResult<Vec<[f64; 2]>> {
-    let coordinates = ring
-        .extract::<PyReadonlyArray2<'_, f64>>()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(format!(
+fn extract_coordinate_ring(ring: &Bound<'_, PyAny>, label: &str) -> PyResult<LineString<f64>> {
+    let coordinates = ring.extract::<PyReadonlyArray2<'_, f64>>().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err(format!(
             "{label} must be a float64 array with shape (n, 2)"
-        )))?;
+        ))
+    })?;
     validate_xy_dimensions(coordinates.shape())?;
     validate_non_empty(coordinates.shape(), label)?;
 
-    let points = coordinates
+    let mut points = coordinates
         .as_array()
         .rows()
         .into_iter()
-        .map(|row| [row[0], row[1]])
+        .map(|row| Coord {
+            x: row[0],
+            y: row[1],
+        })
         .collect::<Vec<_>>();
-    if points.len() < 3 || points.iter().flatten().any(|coordinate| !coordinate.is_finite()) {
+    if points.len() < 3
+        || points
+            .iter()
+            .any(|coordinate| !coordinate.x.is_finite() || !coordinate.y.is_finite())
+    {
         return Err(pyo3::exceptions::PyValueError::new_err(format!(
             "{label} must contain at least three finite coordinates"
         )));
     }
-    Ok(points)
+    // Python callers historically could supply open rings. Close them at this
+    // boundary so the Rust core receives valid GeoRust polygon rings.
+    if points.first() != points.last() {
+        points.push(points[0]);
+    }
+    Ok(LineString::new(points))
 }
 
-fn extract_boundary_regions(boundaries: &Bound<'_, PyAny>) -> PyResult<Vec<BoundaryRegion>> {
+fn extract_polygons(boundaries: &Bound<'_, PyAny>) -> PyResult<Vec<Polygon<f64>>> {
     let boundary_list = boundaries.cast::<PyList>().map_err(|_| {
         pyo3::exceptions::PyValueError::new_err("boundaries_as_shapes must be a list of dicts")
     })?;
@@ -51,11 +63,11 @@ fn extract_boundary_regions(boundaries: &Bound<'_, PyAny>) -> PyResult<Vec<Bound
                 "boundary {region_index} must be a dict"
             ))
         })?;
-        let exterior_value = boundary
-            .get_item("outer boundary")?
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!(
+        let exterior_value = boundary.get_item("outer boundary")?.ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!(
                 "boundary {region_index} is missing 'outer boundary'"
-            )))?;
+            ))
+        })?;
         let exterior = extract_coordinate_ring(&exterior_value, "outer boundary")?;
 
         let mut interiors = Vec::new();
@@ -72,10 +84,7 @@ fn extract_boundary_regions(boundaries: &Bound<'_, PyAny>) -> PyResult<Vec<Bound
             }
         }
 
-        regions.push(BoundaryRegion {
-            exterior,
-            interiors,
-        });
+        regions.push(Polygon::new(exterior, interiors));
     }
 
     if regions.is_empty() {
@@ -113,9 +122,12 @@ pub fn update_circle_areas_using_boundaries<'py>(
         .as_array()
         .rows()
         .into_iter()
-        .map(|row| [row[0], row[1]])
+        .map(|row| Point::new(row[0], row[1]))
         .collect::<Vec<_>>();
-    if centers.iter().flatten().any(|coordinate| !coordinate.is_finite()) {
+    if centers
+        .iter()
+        .any(|point| !point.x().is_finite() || !point.y().is_finite())
+    {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "point_locations must contain only finite coordinates",
         ));
@@ -131,13 +143,14 @@ pub fn update_circle_areas_using_boundaries<'py>(
         ));
     }
 
-    let regions = extract_boundary_regions(&boundaries_as_shapes)?;
+    let regions = extract_polygons(&boundaries_as_shapes)?;
     let updated = circle_areas_inside_regions(
         &centers,
         radius,
         &regions,
         remain_within_connected_component,
-    )?;
+    )
+    .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
 
     let mut writable_areas = areas.try_readwrite().map_err(|_| {
         pyo3::exceptions::PyValueError::new_err("areas must be writable and not already borrowed")
