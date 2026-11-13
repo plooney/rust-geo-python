@@ -163,7 +163,7 @@ let areas = circle_areas_inside_regions(
 ).unwrap();
 ```
 
-This Rust API accepts `geo::Point<f64>` centers and `geo::Polygon<f64>` regions. It uses GeoRust's `Intersects` predicate when selecting the connected component. The analytic circle–edge calculation uses an outward-rounded interval filter and exact dyadic fallback to classify tangencies without an epsilon cutoff. The `robust` crate's orientation and incircle predicates do not directly express this arbitrary-radius line–circle test, so the fallback computes its exact sign locally. Errors, including non-finite coordinates, are returned as `CircleIntersectionError`.
+This Rust API accepts `geo::Point<f64>` centers and `geo::Polygon<f64>` regions. It uses GeoRust's `Intersects` predicate when selecting the connected component. The analytic circle–edge calculation evaluates its discriminant with ordinary `f64` arithmetic. Near tangency, rounding can change the discriminant's sign, classifying an edge as a miss or crossing and introducing a small area error. A future improvement would use an adaptive robust predicate for the discriminant's sign while retaining floating-point arithmetic for the intersection roots. Errors, including non-finite coordinates, are returned as `CircleIntersectionError`.
 
 ## Notes
 - Coordinates are `float64`.

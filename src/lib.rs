@@ -29,7 +29,7 @@ mod rust_geo_python {
     #[pymodule_export]
     use crate::py::rtree::RustRTree;
 
-    //#[cfg(feature = "geoarrow")]
+    #[cfg(feature = "geoarrow")]
     #[pymodule_export]
     use crate::py::geoarrow::{geoarray_from_geom_vec_collection, geoarray_from_polygons};
 }
