@@ -119,13 +119,55 @@ Python module: `rust_geo_python`
 - `intersection(polygon, polygon)`
 - `intersect_tile(multipolygon, tile_polygon, rect)`
 - `point_in_polygon(point, polygon)`
+- `update_circle_areas_using_boundaries(...)` (updates and returns circle areas clipped to included polygon regions, subtracting interior holes)
 - `union_set_shapes(...)`
 - `intersection_shapes(...)`
 - `difference_shapes(...)`
 
+Circle areas can be clipped analytically against polygon boundaries, including holes. The `areas` NumPy array is updated in place and returned:
+
+```python
+areas = np.array([np.pi * radius**2], dtype=np.float64)
+areas = rg.update_circle_areas_using_boundaries(
+    point_locations=np.array([[0.0, 2.0]], dtype=np.float64),
+    areas=areas,
+    distance_to_boundary=np.array([[1.0]], dtype=np.float64),
+    radius=radius,
+    remain_within_connected_component=False,
+    boundaries_as_shapes=[{
+        "outer boundary": outer_boundary,
+        "interior boundary": [excluded_square],
+    }],
+)
+```
+
+Each boundary dictionary uses an `"outer boundary"` coordinate array and an optional `"interior boundary"` list of hole arrays. `distance_to_boundary` remains in the signature for compatibility; the calculation uses the rings directly. With `remain_within_connected_component=False`, areas from all supplied regions are included; with it enabled, each circle is restricted to the region containing its center.
+
+Rust callers can use the same analytic calculation directly with GeoRust primitives:
+
+```rust
+use geo::{LineString, Point, Polygon};
+use rust_geo_python::circle_areas_inside_regions;
+
+let region = Polygon::new(
+    LineString::from(vec![
+        (-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0), (-2.0, -2.0),
+    ]),
+    vec![],
+);
+let areas = circle_areas_inside_regions(
+    &[Point::new(0.0, 0.0)],
+    1.0,
+    &[region],
+    false,
+).unwrap();
+```
+
+This Rust API accepts `geo::Point<f64>` centers and `geo::Polygon<f64>` regions. It uses GeoRust's `Intersects` predicate when selecting the connected component. The analytic circle–edge calculation evaluates its discriminant with ordinary `f64` arithmetic. Near tangency, rounding can change the discriminant's sign, classifying an edge as a miss or crossing and introducing a small area error. A future improvement would use an adaptive robust predicate for the discriminant's sign while retaining floating-point arithmetic for the intersection roots. Errors, including non-finite coordinates, are returned as `CircleIntersectionError`.
+
 ## Notes
 - Coordinates are `float64`.
-- Polygon rings are expected to be closed (first point == last point).
+- Rust `Polygon` rings should be closed (first coordinate == last coordinate); the Python adapter closes open input rings.
 - Boolean ops on shapes currently support polygon and multipolygon combinations.
 - `from_wkt` returns the most specific class (e.g., `RustPoint`, `RustPolygon`, `RustGeometryCollection`).
 - `buffer()` is not supported for `RustGeometryCollection`.

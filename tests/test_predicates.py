@@ -1,7 +1,6 @@
 
-import pytest
 import numpy as np
-from rust_geo_python import RustPolygon, RustPoint, point_in_polygon
+from rust_geo_python import RustLine, RustMultiPoint, RustPolygon, RustPoint, point_in_polygon
 
 def test_contains():
     # Square [0,0] to [2,2]
@@ -49,3 +48,35 @@ def test_point_in_polygon_function():
     p = RustPoint(1.0, 1.0)
     
     assert point_in_polygon(p, poly)
+
+
+def test_closest_point_returns_multiple_points_for_ties():
+    points = np.array([[-1.0, 0.0], [1.0, 0.0]], dtype=np.float64)
+    multipoint = RustMultiPoint(points)
+    query = RustPoint(0.0, 0.0)
+
+    closest = multipoint.closest_point(query)
+    coords = closest.xy()
+
+    assert coords.shape == (2, 2)
+    assert {tuple(row) for row in coords.tolist()} == {(-1.0, 0.0), (1.0, 0.0)}
+
+
+def test_closest_region_returns_overlapping_line_segment():
+    poly_xy = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [0.0, 1.0], [0.0, 0.0]], dtype=np.float64)
+    polygon = RustPolygon(poly_xy, [])
+    line = RustLine(-1.0, 0.5, 3.0, 0.5)
+
+    region = line.closest_region(polygon)
+
+    assert region.xy() == ((0.0, 0.5), (2.0, 0.5))
+
+
+def test_closest_region_returns_parallel_closest_subsegment():
+    poly_xy = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [0.0, 1.0], [0.0, 0.0]], dtype=np.float64)
+    polygon = RustPolygon(poly_xy, [])
+    line = RustLine(-1.0, 2.0, 3.0, 2.0)
+
+    region = line.closest_region(polygon)
+
+    assert region.xy() == ((0.0, 2.0), (2.0, 2.0))
