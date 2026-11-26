@@ -3,6 +3,8 @@ build-backend = "maturin"
 requires = ["maturin>=1.0,<2.0"]
 
 [project]
+name = "rust-geo-python"
+dynamic = ["version"]
 requires-python = ">=3.9"
 
 [tool.maturin]
